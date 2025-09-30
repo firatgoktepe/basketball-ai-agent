@@ -108,9 +108,8 @@ function convertShotAttemptsToEvents(shotAttempts: any[]): GameEvent[] {
       timestamp: attempt.timestamp,
       confidence: attempt.confidence,
       source: "pose-analysis",
-      notes: `Shooting form: ${
-        attempt.shootingForm
-      }, Arm elevation: ${attempt.armElevation.toFixed(2)}`,
+      notes: `Shooting form: ${attempt.shootingForm
+        }, Arm elevation: ${attempt.armElevation.toFixed(2)}`,
     });
   }
 
