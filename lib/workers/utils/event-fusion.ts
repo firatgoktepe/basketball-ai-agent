@@ -4,6 +4,7 @@ interface FusionOptions {
   personDetections: any[];
   ballDetections: any[];
   poseDetections: any[];
+  shotAttempts: any[];
   ocrResults: any[];
   teamClusters: any;
   enable3ptEstimation: boolean;
@@ -14,6 +15,7 @@ export async function fuseEvents(options: FusionOptions): Promise<GameEvent[]> {
     personDetections,
     ballDetections,
     poseDetections,
+    shotAttempts,
     ocrResults,
     enable3ptEstimation,
   } = options;
@@ -23,8 +25,8 @@ export async function fuseEvents(options: FusionOptions): Promise<GameEvent[]> {
   const scoreEvents = detectScoreEvents(ocrResults);
   events.push(...scoreEvents);
 
-  // Rule B: Shot attempt detection from pose + ball
-  const shotEvents = detectShotAttempts(poseDetections, ballDetections);
+  // Rule B: Shot attempt detection from pose analysis
+  const shotEvents = convertShotAttemptsToEvents(shotAttempts);
   events.push(...shotEvents);
 
   // Rule C: Rebound detection
@@ -95,40 +97,21 @@ function detectScoreEvents(ocrResults: any[]): GameEvent[] {
   return events;
 }
 
-function detectShotAttempts(
-  poseDetections: any[],
-  ballDetections: any[]
-): GameEvent[] {
+function convertShotAttemptsToEvents(shotAttempts: any[]): GameEvent[] {
   const events: GameEvent[] = [];
 
-  for (const poseResult of poseDetections) {
-    for (const pose of poseResult.poses) {
-      // Check for shooting pose (arm elevation pattern)
-      const isShooting = detectShootingPose(pose.keypoints);
-
-      if (isShooting) {
-        // Check for ball presence nearby
-        const nearbyBall = findNearbyBall(
-          poseResult.timestamp,
-          ballDetections,
-          pose.bbox
-        );
-
-        const confidence = nearbyBall ? 0.8 : 0.6;
-
-        events.push({
-          id: `shot-${poseResult.timestamp}`,
-          type: "shot_attempt",
-          teamId: pose.teamId || "teamA", // Default to teamA if not assigned
-          timestamp: poseResult.timestamp,
-          confidence,
-          source: nearbyBall ? "pose+ball-heuristic" : "pose-only",
-          notes: nearbyBall
-            ? "Detected by pose and ball tracking"
-            : "Detected by pose analysis",
-        });
-      }
-    }
+  for (const attempt of shotAttempts) {
+    events.push({
+      id: `shot-${attempt.timestamp}-${attempt.playerId}`,
+      type: "shot_attempt",
+      teamId: "teamA", // Will be assigned based on team clustering
+      timestamp: attempt.timestamp,
+      confidence: attempt.confidence,
+      source: "pose-analysis",
+      notes: `Shooting form: ${
+        attempt.shootingForm
+      }, Arm elevation: ${attempt.armElevation.toFixed(2)}`,
+    });
   }
 
   return events;

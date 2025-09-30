@@ -4,29 +4,47 @@ import Tesseract from "tesseract.js";
 
 // Import models and utilities
 import { loadCocoSSD } from "./models/coco-ssd";
-import { loadMoveNet } from "./models/movenet";
+import { loadMoveNet, MoveNetPoseEstimator } from "./models/movenet";
+import {
+  loadONNXBallDetector,
+  isONNXAvailable,
+} from "./models/onnx-ball-detection";
 import { extractFrames } from "./utils/frame-extractor";
 import { detectPersons, clusterTeams } from "./utils/person-detection";
 import { detectBall } from "./utils/ball-detection";
-import { extractPoses } from "./utils/pose-estimation";
+import { extractPoses, detectShotAttempts } from "./utils/pose-estimation";
 import { runOCR } from "./utils/ocr";
 import { processFramesWithOCR } from "./utils/scoreboard-ocr";
 import { fuseEvents } from "./utils/event-fusion";
 
 // Global state
 let cocoModel: any = null;
-let moveNetModel: any = null;
+let moveNetModel: MoveNetPoseEstimator | null = null;
+let onnxBallDetector: any = null;
 let isInitialized = false;
 
 async function initializeModels() {
   if (isInitialized) return;
 
   try {
-    // Load models in parallel
+    // Load core models
     const [coco, moveNet] = await Promise.all([loadCocoSSD(), loadMoveNet()]);
-
     cocoModel = coco;
     moveNetModel = moveNet;
+
+    // Try to load ONNX ball detector if available
+    if (isONNXAvailable()) {
+      try {
+        onnxBallDetector = await loadONNXBallDetector();
+        console.log("ONNX ball detector loaded successfully");
+      } catch (error) {
+        console.warn(
+          "ONNX ball detector failed to load, using HSV fallback:",
+          error
+        );
+      }
+    }
+
     isInitialized = true;
   } catch (error) {
     console.error("Failed to initialize models:", error);
@@ -74,18 +92,22 @@ async function analyzeVideo(options: any) {
         progress: 50,
         message: "Detecting ball movement...",
       });
-      ballDetections = await detectBall(frames);
+      ballDetections = await detectBall(frames, onnxBallDetector);
     }
 
     // Step 4: Pose estimation (if enabled)
     let poseDetections: any[] = [];
-    if (enablePoseEstimation) {
+    let shotAttempts: any[] = [];
+    if (enablePoseEstimation && moveNetModel) {
       onProgress({
         stage: "detection",
         progress: 60,
         message: "Analyzing player poses...",
       });
       poseDetections = await extractPoses(frames, moveNetModel);
+
+      // Detect shot attempts from poses
+      shotAttempts = detectShotAttempts(poseDetections, ballDetections);
     }
 
     // Step 5: OCR on scoreboard
@@ -113,6 +135,7 @@ async function analyzeVideo(options: any) {
       personDetections,
       ballDetections,
       poseDetections,
+      shotAttempts,
       ocrResults,
       teamClusters,
       enable3ptEstimation,
