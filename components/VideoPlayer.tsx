@@ -2,14 +2,22 @@
 
 import { useRef, useEffect, useState, useCallback } from "react";
 import { Play, Pause, Volume2, VolumeX, Maximize } from "lucide-react";
-import type { VideoFile } from "@/types";
+import { PersonDetectionOverlay } from "./PersonDetectionOverlay";
+import type { VideoFile, DetectionResult, GameData } from "@/types";
 
 interface VideoPlayerProps {
   videoFile: VideoFile;
   onDurationChange?: (duration: number) => void;
+  detections?: DetectionResult[];
+  gameData?: GameData | null;
 }
 
-export function VideoPlayer({ videoFile, onDurationChange }: VideoPlayerProps) {
+export function VideoPlayer({
+  videoFile,
+  onDurationChange,
+  detections,
+  gameData,
+}: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -133,6 +141,16 @@ export function VideoPlayer({ videoFile, onDurationChange }: VideoPlayerProps) {
         controls
         preload="metadata"
       />
+
+      {/* Person Detection Overlay */}
+      {detections && detections.length > 0 && (
+        <PersonDetectionOverlay
+          videoFile={videoFile}
+          detections={detections}
+          gameData={gameData ?? null}
+          currentTime={currentTime}
+        />
+      )}
 
       {/* Controls Overlay */}
       <div

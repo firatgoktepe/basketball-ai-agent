@@ -9,13 +9,21 @@ import { ResultsDisplay } from "@/components/ResultsDisplay";
 import { ScoreboardCropTool } from "@/components/ScoreboardCropTool";
 import { AnalysisWorker } from "@/lib/workers/AnalysisWorker";
 import { generateDemoGameData } from "@/lib/demo-data";
-import type { VideoFile, AnalysisProgress, GameData } from "@/types";
+import type {
+  VideoFile,
+  AnalysisProgress,
+  GameData,
+  DetectionResult,
+} from "@/types";
 
 export default function Home() {
   const [videoFile, setVideoFile] = useState<VideoFile | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState<AnalysisProgress | null>(null);
   const [gameData, setGameData] = useState<GameData | null>(null);
+  const [personDetections, setPersonDetections] = useState<DetectionResult[]>(
+    []
+  );
   const [showCropTool, setShowCropTool] = useState(false);
   const [cropRegion, setCropRegion] = useState<{
     x: number;
@@ -110,6 +118,10 @@ export default function Home() {
         // Generate demo data for testing
         const result = generateDemoGameData();
         setGameData(result);
+
+        // Generate mock person detections for visualization
+        const mockDetections = generateMockPersonDetections();
+        setPersonDetections(mockDetections);
       } catch (error) {
         console.error("Analysis failed:", error);
         setProgress({
@@ -131,6 +143,39 @@ export default function Home() {
     },
     []
   );
+
+  const generateMockPersonDetections = (): DetectionResult[] => {
+    const detections: DetectionResult[] = [];
+    const numFrames = 30; // 30 frames for demo
+
+    for (let i = 0; i < numFrames; i++) {
+      const timestamp = i * 2; // 2 seconds per frame
+      const numPersons = Math.floor(Math.random() * 3) + 1; // 1-3 persons per frame
+
+      const frameDetections = [];
+      for (let j = 0; j < numPersons; j++) {
+        const x = Math.random() * 600 + 100;
+        const y = Math.random() * 300 + 100;
+        const width = 60 + Math.random() * 40;
+        const height = 100 + Math.random() * 50;
+
+        frameDetections.push({
+          type: "person" as const,
+          bbox: [x, y, width, height] as [number, number, number, number],
+          confidence: 0.6 + Math.random() * 0.3,
+          teamId: Math.random() > 0.5 ? "teamA" : "teamB",
+        });
+      }
+
+      detections.push({
+        frameIndex: i,
+        timestamp,
+        detections: frameDetections,
+      });
+    }
+
+    return detections;
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -173,6 +218,8 @@ export default function Home() {
               <div className="max-w-4xl mx-auto">
                 <VideoPlayer
                   videoFile={videoFile}
+                  detections={personDetections}
+                  gameData={gameData}
                   onDurationChange={(duration) => {
                     setVideoFile((prev) =>
                       prev ? { ...prev, duration } : null
@@ -220,7 +267,11 @@ export default function Home() {
 
               {/* Results Display */}
               {gameData && (
-                <ResultsDisplay gameData={gameData} videoFile={videoFile} />
+                <ResultsDisplay
+                  gameData={gameData}
+                  videoFile={videoFile}
+                  detections={personDetections}
+                />
               )}
             </div>
           )}

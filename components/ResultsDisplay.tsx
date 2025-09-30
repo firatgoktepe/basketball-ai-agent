@@ -13,14 +13,20 @@ import { GameSummary } from "./GameSummary";
 import { EventTimeline } from "./EventTimeline";
 import { StatisticsCharts } from "./StatisticsCharts";
 import { EventList } from "./EventList";
-import type { GameData, VideoFile } from "@/types";
+import { TeamClusteringVisualization } from "./TeamClusteringVisualization";
+import type { GameData, VideoFile, DetectionResult } from "@/types";
 
 interface ResultsDisplayProps {
   gameData: GameData;
   videoFile: VideoFile;
+  detections?: DetectionResult[];
 }
 
-export function ResultsDisplay({ gameData, videoFile }: ResultsDisplayProps) {
+export function ResultsDisplay({
+  gameData,
+  videoFile,
+  detections,
+}: ResultsDisplayProps) {
   const [activeTab, setActiveTab] = useState<
     "summary" | "timeline" | "charts" | "events"
   >("summary");
@@ -130,7 +136,17 @@ export function ResultsDisplay({ gameData, videoFile }: ResultsDisplayProps) {
 
       {/* Tab Content */}
       <div className="min-h-[400px]">
-        {activeTab === "summary" && <GameSummary gameData={gameData} />}
+        {activeTab === "summary" && (
+          <div className="space-y-6">
+            <GameSummary gameData={gameData} />
+            {detections && detections.length > 0 && (
+              <TeamClusteringVisualization
+                gameData={gameData}
+                detections={detections}
+              />
+            )}
+          </div>
+        )}
 
         {activeTab === "timeline" && (
           <EventTimeline gameData={gameData} videoFile={videoFile} />

@@ -50,7 +50,7 @@ async function analyzeVideo(options: any) {
         // Step 2: Person detection and team clustering
         onProgress({ stage: 'detection', progress: 30, message: 'Detecting players and clustering teams...' })
         const personDetections = await detectPersons(frames, cocoModel)
-        const teamClusters = await clusterTeams(personDetections)
+        const teamClusters = await clusterTeams(personDetections, frames)
 
         // Step 3: Ball detection (if enabled)
         let ballDetections: any[] = []
