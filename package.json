@@ -23,7 +23,6 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "@tensorflow/tfjs": "^4.15.0",
-    "@tensorflow/tfjs-node": "^4.15.0",
     "tesseract.js": "^5.0.4",
     "recharts": "^2.8.0",
     "comlink": "^4.4.1",
