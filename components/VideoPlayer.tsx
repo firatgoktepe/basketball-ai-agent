@@ -3,13 +3,16 @@
 import { useRef, useEffect, useState, useCallback } from "react";
 import { Play, Pause, Volume2, VolumeX, Maximize } from "lucide-react";
 import { PersonDetectionOverlay } from "./PersonDetectionOverlay";
-import type { VideoFile, DetectionResult, GameData } from "@/types";
+import { ScoreboardCropTool } from "./ScoreboardCropTool";
+import type { VideoFile, DetectionResult, GameData, CropRegion } from "@/types";
 
 interface VideoPlayerProps {
   videoFile: VideoFile;
   onDurationChange?: (duration: number) => void;
   detections?: DetectionResult[];
   gameData?: GameData | null;
+  onCropRegionChange?: (region: CropRegion | null) => void;
+  cropRegion?: CropRegion | null;
 }
 
 export function VideoPlayer({
@@ -17,6 +20,8 @@ export function VideoPlayer({
   onDurationChange,
   detections,
   gameData,
+  onCropRegionChange,
+  cropRegion,
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -25,6 +30,7 @@ export function VideoPlayer({
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [showControls, setShowControls] = useState(true);
+  const [isCropModeActive, setIsCropModeActive] = useState(false);
 
   const formatTime = useCallback((time: number) => {
     const minutes = Math.floor(time / 60);
@@ -125,6 +131,17 @@ export function VideoPlayer({
     }
   }, [handleSeekToTime]);
 
+  const handleCropRegionChange = useCallback(
+    (region: CropRegion | null) => {
+      onCropRegionChange?.(region);
+    },
+    [onCropRegionChange]
+  );
+
+  const handleToggleCropMode = useCallback(() => {
+    setIsCropModeActive(!isCropModeActive);
+  }, [isCropModeActive]);
+
   return (
     <div className="relative bg-black rounded-lg overflow-hidden group">
       <video
@@ -151,6 +168,14 @@ export function VideoPlayer({
           currentTime={currentTime}
         />
       )}
+
+      {/* Scoreboard Crop Tool */}
+      <ScoreboardCropTool
+        videoElement={videoRef.current}
+        onCropRegionChange={handleCropRegionChange}
+        isActive={isCropModeActive}
+        onToggle={handleToggleCropMode}
+      />
 
       {/* Controls Overlay */}
       <div

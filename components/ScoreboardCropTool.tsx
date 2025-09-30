@@ -1,233 +1,214 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Check, X, Crop } from "lucide-react";
-import type { VideoFile } from "@/types";
+import { Crop, X, Check } from "lucide-react";
+import type { CropRegion } from "@/types";
 
 interface ScoreboardCropToolProps {
-  videoFile: VideoFile;
-  onCropComplete: (region: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  }) => void;
-  onCancel: () => void;
+  videoElement: HTMLVideoElement | null;
+  onCropRegionChange: (region: CropRegion | null) => void;
+  isActive: boolean;
+  onToggle: () => void;
 }
 
 export function ScoreboardCropTool({
-  videoFile,
-  onCropComplete,
-  onCancel,
+  videoElement,
+  onCropRegionChange,
+  isActive,
+  onToggle,
 }: ScoreboardCropToolProps) {
   const [isDrawing, setIsDrawing] = useState(false);
-  const [cropRegion, setCropRegion] = useState<{
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  } | null>(null);
   const [startPoint, setStartPoint] = useState<{ x: number; y: number } | null>(
     null
   );
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const [currentPoint, setCurrentPoint] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+  const [cropRegion, setCropRegion] = useState<CropRegion | null>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+
+  const getRelativePosition = useCallback(
+    (e: React.MouseEvent) => {
+      if (!overlayRef.current || !videoElement) return { x: 0, y: 0 };
+
+      const rect = overlayRef.current.getBoundingClientRect();
+      const videoRect = videoElement.getBoundingClientRect();
+
+      // Calculate position relative to video element
+      const x = e.clientX - videoRect.left;
+      const y = e.clientY - videoRect.top;
+
+      // Ensure coordinates are within video bounds
+      const clampedX = Math.max(0, Math.min(x, videoRect.width));
+      const clampedY = Math.max(0, Math.min(y, videoRect.height));
+
+      return { x: clampedX, y: clampedY };
+    },
+    [videoElement]
+  );
 
   const handleMouseDown = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
+    (e: React.MouseEvent) => {
+      if (!isActive || !videoElement) return;
 
-      const rect = canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-
-      setStartPoint({ x, y });
+      e.preventDefault();
+      const pos = getRelativePosition(e);
+      setStartPoint(pos);
+      setCurrentPoint(pos);
       setIsDrawing(true);
-      setCropRegion(null);
     },
-    []
+    [isActive, videoElement, getRelativePosition]
   );
 
   const handleMouseMove = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
-      if (!isDrawing || !startPoint || !canvasRef.current) return;
+    (e: React.MouseEvent) => {
+      if (!isDrawing || !startPoint) return;
 
-      const canvas = canvasRef.current;
-      const rect = canvas.getBoundingClientRect();
-      const currentX = e.clientX - rect.left;
-      const currentY = e.clientY - rect.top;
-
-      const x = Math.min(startPoint.x, currentX);
-      const y = Math.min(startPoint.y, currentY);
-      const width = Math.abs(currentX - startPoint.x);
-      const height = Math.abs(currentY - startPoint.y);
-
-      setCropRegion({ x, y, width, height });
-
-      // Draw crop region directly here to avoid dependency issues
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        // Clear canvas
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        // Draw overlay
-        ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        // Draw crop region
-        ctx.clearRect(x, y, width, height);
-
-        // Draw border
-        ctx.strokeStyle = "#3b82f6";
-        ctx.lineWidth = 2;
-        ctx.strokeRect(x, y, width, height);
-
-        // Draw corner handles
-        const handleSize = 8;
-        ctx.fillStyle = "#3b82f6";
-        ctx.fillRect(
-          x - handleSize / 2,
-          y - handleSize / 2,
-          handleSize,
-          handleSize
-        );
-        ctx.fillRect(
-          x + width - handleSize / 2,
-          y - handleSize / 2,
-          handleSize,
-          handleSize
-        );
-        ctx.fillRect(
-          x - handleSize / 2,
-          y + height - handleSize / 2,
-          handleSize,
-          handleSize
-        );
-        ctx.fillRect(
-          x + width - handleSize / 2,
-          y + height - handleSize / 2,
-          handleSize,
-          handleSize
-        );
-      }
+      const pos = getRelativePosition(e);
+      setCurrentPoint(pos);
     },
-    [isDrawing, startPoint]
+    [isDrawing, startPoint, getRelativePosition]
   );
 
   const handleMouseUp = useCallback(() => {
+    if (!isDrawing || !startPoint || !currentPoint) return;
+
     setIsDrawing(false);
+
+    // Calculate crop region
+    const x = Math.min(startPoint.x, currentPoint.x);
+    const y = Math.min(startPoint.y, currentPoint.y);
+    const width = Math.abs(currentPoint.x - startPoint.x);
+    const height = Math.abs(currentPoint.y - startPoint.y);
+
+    // Only create crop region if it's large enough
+    if (width > 10 && height > 10) {
+      const newCropRegion: CropRegion = { x, y, width, height };
+      setCropRegion(newCropRegion);
+      onCropRegionChange(newCropRegion);
+    }
+
     setStartPoint(null);
-  }, []);
+    setCurrentPoint(null);
+  }, [isDrawing, startPoint, currentPoint, onCropRegionChange]);
+
+  const handleClear = useCallback(() => {
+    setCropRegion(null);
+    setStartPoint(null);
+    setCurrentPoint(null);
+    setIsDrawing(false);
+    onCropRegionChange(null);
+  }, [onCropRegionChange]);
 
   const handleConfirm = useCallback(() => {
     if (cropRegion) {
-      onCropComplete(cropRegion);
+      onToggle(); // Close the crop tool
     }
-  }, [cropRegion, onCropComplete]);
+  }, [cropRegion, onToggle]);
 
-  const handleReset = useCallback(() => {
-    setCropRegion(null);
-    if (canvasRef.current) {
-      const ctx = canvasRef.current.getContext("2d");
-      if (ctx) {
-        ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-      }
+  // Calculate current crop rectangle
+  const getCropRect = () => {
+    if (isDrawing && startPoint && currentPoint) {
+      const x = Math.min(startPoint.x, currentPoint.x);
+      const y = Math.min(startPoint.y, currentPoint.y);
+      const width = Math.abs(currentPoint.x - startPoint.x);
+      const height = Math.abs(currentPoint.y - startPoint.y);
+      return { x, y, width, height };
     }
-  }, []);
+    return cropRegion;
+  };
 
-  // Update canvas size when video loads
-  useEffect(() => {
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    if (!video || !canvas) return;
-
-    const updateCanvasSize = () => {
-      const videoWidth = video.videoWidth;
-      const videoHeight = video.videoHeight;
-      const containerWidth = video.clientWidth;
-      const containerHeight = video.clientHeight;
-
-      // Calculate scale to fit video in container
-      const scaleX = containerWidth / videoWidth;
-      const scaleY = containerHeight / videoHeight;
-      const scale = Math.min(scaleX, scaleY);
-
-      canvas.width = videoWidth * scale;
-      canvas.height = videoHeight * scale;
-      canvas.style.width = `${videoWidth * scale}px`;
-      canvas.style.height = `${videoHeight * scale}px`;
-    };
-
-    if (video.videoWidth > 0) {
-      updateCanvasSize();
-    } else {
-      video.addEventListener("loadedmetadata", updateCanvasSize);
-      return () =>
-        video.removeEventListener("loadedmetadata", updateCanvasSize);
-    }
-  }, []);
+  const currentRect = getCropRect();
 
   return (
-    <div className="space-y-4">
-      <div className="text-center">
-        <h3 className="text-lg font-semibold mb-2">Crop Scoreboard Region</h3>
-        <p className="text-muted-foreground">
-          Click and drag to select the area containing the scoreboard for OCR
-          analysis
-        </p>
-      </div>
+    <>
+      {/* Crop Tool Button */}
+      <button
+        onClick={onToggle}
+        className={`
+          absolute top-4 right-4 z-20 p-2 rounded-lg transition-all duration-200
+          ${
+            isActive
+              ? "bg-blue-600 text-white shadow-lg"
+              : "bg-white/90 text-gray-700 hover:bg-white shadow-md"
+          }
+        `}
+        title={isActive ? "Exit crop mode" : "Crop scoreboard region"}
+      >
+        <Crop className="w-5 h-5" />
+      </button>
 
-      <div className="relative max-w-4xl mx-auto">
-        <video
-          ref={videoRef}
-          src={videoFile.url}
-          className="w-full h-auto max-h-[60vh]"
-          muted
-          loop
-        />
-        <canvas
-          ref={canvasRef}
-          className="absolute top-0 left-0 w-full h-full cursor-crosshair"
+      {/* Crop Overlay */}
+      {isActive && videoElement && (
+        <div
+          ref={overlayRef}
+          className="absolute inset-0 z-10 cursor-crosshair"
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
-        />
-      </div>
-
-      <div className="flex items-center justify-center gap-4">
-        <button
-          onClick={handleReset}
-          className="px-4 py-2 text-sm border border-muted-foreground rounded-lg hover:bg-muted transition-colors"
+          onMouseLeave={() => setIsDrawing(false)}
         >
-          Reset
-        </button>
+          {/* Instructions */}
+          <div className="absolute top-4 left-4 bg-black/80 text-white p-3 rounded-lg text-sm">
+            <p className="font-medium mb-1">Scoreboard Crop Tool</p>
+            <p className="text-gray-300">
+              {isDrawing
+                ? "Drag to select the scoreboard region"
+                : "Click and drag to select the scoreboard region"}
+            </p>
+          </div>
 
-        <button
-          onClick={onCancel}
-          className="px-4 py-2 text-sm border border-muted-foreground rounded-lg hover:bg-muted transition-colors flex items-center gap-2"
-        >
-          <X className="w-4 h-4" />
-          Cancel
-        </button>
+          {/* Current crop rectangle */}
+          {currentRect && (
+            <div
+              className="absolute border-2 border-blue-500 bg-blue-500/20 pointer-events-none"
+              style={{
+                left: currentRect.x,
+                top: currentRect.y,
+                width: currentRect.width,
+                height: currentRect.height,
+              }}
+            >
+              {/* Corner handles */}
+              <div className="absolute -top-1 -left-1 w-3 h-3 bg-blue-500 rounded-full" />
+              <div className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 rounded-full" />
+              <div className="absolute -bottom-1 -left-1 w-3 h-3 bg-blue-500 rounded-full" />
+              <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-blue-500 rounded-full" />
+            </div>
+          )}
 
-        <button
-          onClick={handleConfirm}
-          disabled={!cropRegion}
-          className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-        >
-          <Check className="w-4 h-4" />
-          Confirm Crop
-        </button>
-      </div>
+          {/* Action buttons */}
+          {cropRegion && (
+            <div className="absolute bottom-4 left-4 flex gap-2">
+              <button
+                onClick={handleClear}
+                className="bg-red-600 hover:bg-red-700 text-white p-2 rounded-lg transition-colors"
+                title="Clear selection"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              <button
+                onClick={handleConfirm}
+                className="bg-green-600 hover:bg-green-700 text-white p-2 rounded-lg transition-colors"
+                title="Confirm selection"
+              >
+                <Check className="w-4 h-4" />
+              </button>
+            </div>
+          )}
 
-      {cropRegion && (
-        <div className="text-center text-sm text-muted-foreground">
-          Selected region: {Math.round(cropRegion.width)} ×{" "}
-          {Math.round(cropRegion.height)} pixels
+          {/* Crop region info */}
+          {cropRegion && (
+            <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black/80 text-white p-2 rounded-lg text-sm">
+              <p>
+                Scoreboard Region: {Math.round(cropRegion.width)}×
+                {Math.round(cropRegion.height)}
+              </p>
+            </div>
+          )}
         </div>
       )}
-    </div>
+    </>
   );
 }

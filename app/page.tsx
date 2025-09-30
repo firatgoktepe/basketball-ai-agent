@@ -6,7 +6,7 @@ import { VideoUploader } from "@/components/VideoUploader";
 import { ProcessingControls } from "@/components/ProcessingControls";
 import { ProgressIndicator } from "@/components/ProgressIndicator";
 import { ResultsDisplay } from "@/components/ResultsDisplay";
-import { ScoreboardCropTool } from "@/components/ScoreboardCropTool";
+import type { CropRegion } from "@/types";
 import { AnalysisWorker } from "@/lib/workers/AnalysisWorker";
 import { generateDemoGameData } from "@/lib/demo-data";
 import type {
@@ -24,13 +24,7 @@ export default function Home() {
   const [personDetections, setPersonDetections] = useState<DetectionResult[]>(
     []
   );
-  const [showCropTool, setShowCropTool] = useState(false);
-  const [cropRegion, setCropRegion] = useState<{
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  } | null>(null);
+  const [cropRegion, setCropRegion] = useState<CropRegion | null>(null);
 
   const analysisWorkerRef = useRef<AnalysisWorker | null>(null);
 
@@ -136,13 +130,9 @@ export default function Home() {
     [videoFile, cropRegion]
   );
 
-  const handleCropComplete = useCallback(
-    (region: { x: number; y: number; width: number; height: number }) => {
-      setCropRegion(region);
-      setShowCropTool(false);
-    },
-    []
-  );
+  const handleCropRegionChange = useCallback((region: CropRegion | null) => {
+    setCropRegion(region);
+  }, []);
 
   const generateMockPersonDetections = (): DetectionResult[] => {
     const detections: DetectionResult[] = [];
@@ -220,6 +210,8 @@ export default function Home() {
                   videoFile={videoFile}
                   detections={personDetections}
                   gameData={gameData}
+                  cropRegion={cropRegion}
+                  onCropRegionChange={handleCropRegionChange}
                   onDurationChange={(duration) => {
                     setVideoFile((prev) =>
                       prev ? { ...prev, duration } : null
@@ -228,28 +220,18 @@ export default function Home() {
                 />
               </div>
 
-              {/* Scoreboard Crop Tool */}
-              {!cropRegion && !showCropTool && (
+              {/* Crop Region Status */}
+              {cropRegion && (
                 <div className="text-center">
-                  <button
-                    onClick={() => setShowCropTool(true)}
-                    className="px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
-                  >
-                    Crop Scoreboard Region
-                  </button>
+                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-100 text-green-800 rounded-lg">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    Scoreboard region selected ({Math.round(cropRegion.width)}×
+                    {Math.round(cropRegion.height)})
+                  </div>
                   <p className="text-sm text-muted-foreground mt-2">
-                    Click and drag on the video to select the scoreboard area
-                    for OCR analysis
+                    Click the crop tool button on the video to adjust the region
                   </p>
                 </div>
-              )}
-
-              {showCropTool && (
-                <ScoreboardCropTool
-                  videoFile={videoFile}
-                  onCropComplete={handleCropComplete}
-                  onCancel={() => setShowCropTool(false)}
-                />
               )}
 
               {/* Processing Controls */}

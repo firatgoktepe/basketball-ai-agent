@@ -1,41 +1,45 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import { Play, Settings, Zap } from 'lucide-react'
+import { useState } from "react";
+import { Play, Settings, Zap } from "lucide-react";
 
 interface ProcessingControlsProps {
   onStartAnalysis: (options: {
-    samplingRate: number
-    enableBallDetection: boolean
-    enablePoseEstimation: boolean
-    enable3ptEstimation: boolean
-  }) => void
-  disabled?: boolean
+    samplingRate: number;
+    enableBallDetection: boolean;
+    enablePoseEstimation: boolean;
+    enable3ptEstimation: boolean;
+  }) => void;
+  disabled?: boolean;
 }
 
-export function ProcessingControls({ onStartAnalysis, disabled = false }: ProcessingControlsProps) {
-  const [samplingRate, setSamplingRate] = useState(1)
-  const [enableBallDetection, setEnableBallDetection] = useState(false)
-  const [enablePoseEstimation, setEnablePoseEstimation] = useState(false)
-  const [enable3ptEstimation, setEnable3ptEstimation] = useState(false)
-  const [showAdvanced, setShowAdvanced] = useState(false)
+export function ProcessingControls({
+  onStartAnalysis,
+  disabled = false,
+}: ProcessingControlsProps) {
+  const [samplingRate, setSamplingRate] = useState(1);
+  const [enableBallDetection, setEnableBallDetection] = useState(false);
+  const [enablePoseEstimation, setEnablePoseEstimation] = useState(false);
+  const [enable3ptEstimation, setEnable3ptEstimation] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const handleStartAnalysis = () => {
     onStartAnalysis({
       samplingRate,
       enableBallDetection,
       enablePoseEstimation,
-      enable3ptEstimation
-    })
-  }
+      enable3ptEstimation,
+    });
+  };
 
   const getEstimatedTime = () => {
     // Rough estimation: 1fps = 1 minute per minute of video
     // Higher sampling rates and advanced features increase processing time
-    const baseTime = samplingRate
-    const advancedMultiplier = enableBallDetection || enablePoseEstimation ? 2 : 1
-    return Math.round(baseTime * advancedMultiplier)
-  }
+    const baseTime = samplingRate;
+    const advancedMultiplier =
+      enableBallDetection || enablePoseEstimation ? 2 : 1;
+    return Math.round(baseTime * advancedMultiplier);
+  };
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -68,7 +72,8 @@ export function ProcessingControls({ onStartAnalysis, disabled = false }: Proces
             </div>
           </div>
           <p className="text-xs text-muted-foreground mt-2">
-            Higher sampling rates provide more accurate results but take longer to process
+            Higher sampling rates provide more accurate results but take longer
+            to process
           </p>
         </div>
 
@@ -81,7 +86,13 @@ export function ProcessingControls({ onStartAnalysis, disabled = false }: Proces
             <Settings className="w-4 h-4" />
             Advanced Features
             <span className="text-xs text-muted-foreground">
-              ({enableBallDetection || enablePoseEstimation || enable3ptEstimation ? 'Enabled' : 'Disabled'})
+              (
+              {enableBallDetection ||
+              enablePoseEstimation ||
+              enable3ptEstimation
+                ? "Enabled"
+                : "Disabled"}
+              )
             </span>
           </button>
         </div>
@@ -100,7 +111,8 @@ export function ProcessingControls({ onStartAnalysis, disabled = false }: Proces
                 <div>
                   <div className="font-medium">Ball Detection</div>
                   <div className="text-xs text-muted-foreground">
-                    Track ball movement for more accurate shot and rebound detection
+                    Track ball movement for more accurate shot and rebound
+                    detection
                   </div>
                 </div>
               </label>
@@ -146,7 +158,7 @@ export function ProcessingControls({ onStartAnalysis, disabled = false }: Proces
               <span className="text-sm font-medium">Performance Notice</span>
             </div>
             <p className="text-xs text-yellow-700 mt-1">
-              Advanced features will significantly increase processing time. 
+              Advanced features will significantly increase processing time.
               Estimated time: ~{getEstimatedTime()}x video duration.
             </p>
           </div>
@@ -162,12 +174,12 @@ export function ProcessingControls({ onStartAnalysis, disabled = false }: Proces
             <Play className="w-5 h-5" />
             Start Analysis
           </button>
-          
+
           <p className="text-xs text-muted-foreground text-center mt-2">
             Estimated processing time: ~{getEstimatedTime()}x video duration
           </p>
         </div>
       </div>
     </div>
-  )
+  );
 }
