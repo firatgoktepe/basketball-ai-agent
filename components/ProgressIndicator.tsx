@@ -93,7 +93,7 @@ export function ProgressIndicator({ progress }: ProgressIndicatorProps) {
           <div className="grid grid-cols-2 gap-2 text-xs">
             {Object.entries(stageLabels).map(([stage, label]) => {
               const isCompleted =
-                progress.stage === "results" ||
+                (progress.stage as string) === "results" ||
                 (stage === "initializing" &&
                   progress.stage !== "initializing") ||
                 (stage === "sampling" &&
@@ -104,7 +104,8 @@ export function ProgressIndicator({ progress }: ProgressIndicatorProps) {
                   ["ocr", "fusion", "results"].includes(progress.stage)) ||
                 (stage === "ocr" &&
                   ["fusion", "results"].includes(progress.stage)) ||
-                (stage === "fusion" && progress.stage === "results");
+                (stage === "fusion" &&
+                  (progress.stage as string) === "results");
 
               const isCurrent = progress.stage === stage;
 
