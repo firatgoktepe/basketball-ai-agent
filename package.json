@@ -15,7 +15,8 @@
     "format:check": "prettier --check .",
     "clean": "rm -rf node_modules && rm -rf .next && rm -rf .turbo && rm -rf .cursor && rm -rf .vercel && rm -rf .env && rm -rf .env.local && rm -rf .env.development.local && rm -rf .env.test.local && rm -rf .env.production.local",
     "setup": "sh setup.sh",
-    "dev:clean": "sh dev.sh"
+    "dev:clean": "sh dev.sh",
+    "dev:first": "./dev.sh"
   },
   "dependencies": {
     "next": "15.0.0",
