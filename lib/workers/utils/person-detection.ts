@@ -166,22 +166,49 @@ function detectPersonsInFrameFallback(
 export async function clusterTeams(
   detections: DetectionResult[],
   frames: ImageData[]
-): Promise<{ teamA: string; teamB: string }> {
+): Promise<
+  Array<{
+    centroid: { r: number; g: number; b: number };
+    samples: any[];
+    teamId: string;
+  }>
+> {
   // Extract jersey colors from person detections
   const colorSamples = extractJerseyColors(detections, frames);
 
   if (colorSamples.length < 2) {
-    // Not enough samples for clustering
-    return { teamA: "teamA", teamB: "teamB" };
+    // Not enough samples for clustering - return default clusters
+    console.log("Not enough color samples for clustering, using fallback");
+    return [
+      {
+        centroid: { r: 0, g: 51, b: 204 }, // Blue
+        samples: [],
+        teamId: "teamA",
+      },
+      {
+        centroid: { r: 204, g: 0, b: 0 }, // Red
+        samples: [],
+        teamId: "teamB",
+      },
+    ];
   }
+
+  console.log(`Extracted ${colorSamples.length} color samples for clustering`);
 
   // Perform K-means clustering on colors
   const clusters = clusterColorsByKMeans(colorSamples, 2);
 
   // Assign team IDs based on cluster membership
-  const teamAssignments = assignTeamsToClusters(clusters);
+  assignTeamsToClusters(clusters);
 
-  return teamAssignments;
+  // Ensure all clusters have teamId assigned
+  const clustersWithTeamId = clusters.map((cluster, index) => ({
+    ...cluster,
+    teamId: cluster.teamId || (index === 0 ? "teamA" : "teamB"),
+  }));
+
+  console.log("Team clusters:", clustersWithTeamId);
+  return clustersWithTeamId;
 }
 
 function extractDominantColor(
@@ -249,13 +276,21 @@ function performKMeansClustering(
 function assignTeamsToClusters(
   clusters: Array<{
     centroid: { r: number; g: number; b: number };
-    samples: Array<{ r: number; g: number; b: number }>;
+    samples: any[];
+    teamId?: string;
   }>
-): { teamA: string; teamB: string } {
-  // Assign team colors based on cluster centroids
-  // This is a simplified version - in reality, you'd analyze the actual colors
-  return {
-    teamA: "teamA",
-    teamB: "teamB",
-  };
+): void {
+  // Sort clusters by sample count (larger clusters are more likely to be the main teams)
+  clusters.sort((a, b) => b.samples.length - a.samples.length);
+
+  for (let i = 0; i < clusters.length; i++) {
+    const cluster = clusters[i];
+
+    // Assign team based on cluster size and position
+    if (i === 0) {
+      cluster.teamId = "teamA";
+    } else if (i === 1) {
+      cluster.teamId = "teamB";
+    }
+  }
 }

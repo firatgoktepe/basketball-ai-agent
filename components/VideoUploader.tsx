@@ -26,9 +26,18 @@ export function VideoUploader({ onVideoSelect }: VideoUploaderProps) {
       return "File size must be less than 500MB";
     }
 
-    // Check if it's MP4
-    if (!file.type.includes("mp4")) {
-      return "Please select an MP4 video file for best compatibility";
+    // Check for common video formats
+    const supportedTypes = ["mp4", "webm", "mov", "avi", "mkv", "wmv", "flv"];
+    const fileExtension = file.name.toLowerCase().split(".").pop();
+    const isSupportedType =
+      supportedTypes.includes(fileExtension || "") ||
+      file.type.includes("mp4") ||
+      file.type.includes("webm") ||
+      file.type.includes("quicktime") ||
+      file.type.includes("avi");
+
+    if (!isSupportedType) {
+      return "Please select a supported video file (MP4, WebM, MOV, AVI, etc.)";
     }
 
     return null;
@@ -100,7 +109,7 @@ export function VideoUploader({ onVideoSelect }: VideoUploaderProps) {
       >
         <input
           type="file"
-          accept="video/mp4,video/quicktime"
+          accept="video/mp4,video/quicktime,video/webm,video/avi,video/x-msvideo,video/mkv,video/x-matroska,video/x-ms-wmv,video/x-flv"
           onChange={handleFileInputChange}
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
         />
@@ -119,7 +128,7 @@ export function VideoUploader({ onVideoSelect }: VideoUploaderProps) {
             </p>
             <div className="flex items-center justify-center gap-2 text-xs sm:text-sm text-muted-foreground">
               <Upload className="w-3 h-3 sm:w-4 sm:h-4" />
-              <span>MP4 files up to 500MB</span>
+              <span>Video files up to 500MB (MP4, WebM, MOV, AVI, etc.)</span>
             </div>
           </div>
         </div>

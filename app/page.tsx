@@ -33,33 +33,43 @@ export default function Home() {
   const analysisWorkerRef = useRef<AnalysisWorker | null>(null);
 
   const handleVideoSelect = useCallback((file: File) => {
-    const videoFile: VideoFile = {
-      file,
-      url: URL.createObjectURL(file),
-      name: file.name,
-      size: file.size,
-      duration: 0, // Will be set when video loads
-    };
-    setVideoFile(videoFile);
-    setGameData(null);
-    setProgress(null);
+    console.log("🎬 Uploading video file:", file);
+    try {
+      const videoFile: VideoFile = {
+        file,
+        url: URL.createObjectURL(file),
+        name: file.name,
+        size: file.size,
+        duration: 0, // Will be set when video loads
+      };
+      console.log("✅ Video file created:", videoFile);
+      setVideoFile(videoFile);
+      setGameData(null);
+      setProgress(null);
+    } catch (error) {
+      console.error("❌ Error creating video file:", error);
+    }
   }, []);
 
   // Demo function to load a sample video
   const loadDemoVideo = useCallback(() => {
-    console.log("Loading demo video...");
-    // Create a demo video file for testing
-    const demoVideoFile: VideoFile = {
-      file: new File([""], "demo_basketball_game.mp4", { type: "video/mp4" }),
-      url: "demo-video.mp4", // Using a reliable sample video URL
-      name: "demo_basketball_game.mp4",
-      size: 1024 * 1024 * 10, // 10MB
-      duration: 125.4,
-    };
-    console.log("Demo video file created:", demoVideoFile);
-    setVideoFile(demoVideoFile);
-    setGameData(null);
-    setProgress(null);
+    console.log("🎬 Loading demo video...");
+    try {
+      // Create a demo video file for testing
+      const demoVideoFile: VideoFile = {
+        file: new File([""], "demo_basketball_game.mp4", { type: "video/mp4" }),
+        url: "/demo-video.mp4", // Fixed: Use proper public directory path
+        name: "demo_basketball_game.mp4",
+        size: 1024 * 1024 * 10, // 10MB
+        duration: 125.4,
+      };
+      console.log("✅ Demo video file created:", demoVideoFile);
+      setVideoFile(demoVideoFile);
+      setGameData(null);
+      setProgress(null);
+    } catch (error) {
+      console.error("❌ Error creating demo video:", error);
+    }
   }, []);
 
   const handleStartAnalysis = useCallback(
@@ -79,45 +89,38 @@ export default function Home() {
       });
 
       try {
-        // Simulate analysis progress with demo data
-        const stages = [
-          {
-            stage: "sampling" as const,
-            progress: 20,
-            message: "Extracting video frames...",
-          },
-          {
-            stage: "detection" as const,
-            progress: 40,
-            message: "Detecting players and objects...",
-          },
-          {
-            stage: "ocr" as const,
-            progress: 60,
-            message: "Reading scoreboard...",
-          },
-          {
-            stage: "fusion" as const,
-            progress: 80,
-            message: "Processing events...",
-          },
-          {
-            stage: "results" as const,
-            progress: 100,
-            message: "Generating results...",
-          },
-        ];
-
-        for (const stage of stages) {
-          setProgress(stage);
-          await new Promise((resolve) => setTimeout(resolve, 1000)); // Simulate processing time
+        // Initialize analysis worker if not already done
+        if (!analysisWorkerRef.current) {
+          analysisWorkerRef.current = new AnalysisWorker();
         }
 
-        // Generate demo data for testing
-        const result = generateDemoGameData();
+        const worker = analysisWorkerRef.current;
+
+        // Start the analysis
+        console.log(
+          "🚀 Starting REAL analysis with worker for video:",
+          videoFile.name
+        );
+        const result = await worker.analyzeVideo(
+          {
+            videoFile,
+            cropRegion,
+            samplingRate: options.samplingRate,
+            enableBallDetection: options.enableBallDetection,
+            enablePoseEstimation: options.enablePoseEstimation,
+            enable3ptEstimation: options.enable3ptEstimation,
+          },
+          (progressData) => {
+            setProgress(progressData);
+          }
+        );
+
+        console.log("✅ Analysis completed with result:", result);
         setGameData(result);
 
-        // Generate mock person detections for visualization
+        // Note: Real person detections would come from the worker
+        // For now, we'll generate mock detections for visualization
+        // In a full implementation, the worker would return these too
         const mockDetections = generateMockPersonDetections();
         setPersonDetections(mockDetections);
       } catch (error) {
@@ -270,6 +273,7 @@ export default function Home() {
                       gameData={gameData}
                       videoFile={videoFile}
                       detections={personDetections}
+                      isRealAnalysis={true}
                     />
                   </div>
                 )}

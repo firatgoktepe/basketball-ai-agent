@@ -19,7 +19,10 @@ export class AnalysisWorker {
     this.isInitialized = true;
   }
 
-  async analyzeVideo(options: AnalysisOptions): Promise<GameData> {
+  async analyzeVideo(
+    options: Omit<AnalysisOptions, "onProgress">,
+    onProgress?: (progress: AnalysisProgress) => void
+  ): Promise<GameData> {
     await this.initialize();
 
     return new Promise((resolve, reject) => {
@@ -33,7 +36,9 @@ export class AnalysisWorker {
 
         switch (type) {
           case "progress":
-            options.onProgress(data);
+            if (onProgress) {
+              onProgress(data);
+            }
             break;
           case "result":
             this.worker?.removeEventListener("message", handleMessage);

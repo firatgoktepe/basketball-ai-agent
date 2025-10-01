@@ -11,6 +11,8 @@ import {
   FileText,
   Table,
   FileSpreadsheet,
+  CheckCircle,
+  AlertTriangle,
 } from "lucide-react";
 import { GameSummary } from "./GameSummary";
 import { EventTimeline } from "./EventTimeline";
@@ -23,12 +25,14 @@ interface ResultsDisplayProps {
   gameData: GameData;
   videoFile: VideoFile;
   detections?: DetectionResult[];
+  isRealAnalysis?: boolean;
 }
 
 export function ResultsDisplay({
   gameData,
   videoFile,
   detections,
+  isRealAnalysis = true,
 }: ResultsDisplayProps) {
   const [activeTab, setActiveTab] = useState<
     "summary" | "timeline" | "charts" | "events"
@@ -207,6 +211,26 @@ export function ResultsDisplay({
         <p className="text-muted-foreground">
           Game statistics extracted from {videoFile.name}
         </p>
+
+        {/* Analysis Status Indicator */}
+        <div
+          className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium mt-3 ${
+            isRealAnalysis
+              ? "bg-green-50 text-green-700 border border-green-200"
+              : "bg-yellow-50 text-yellow-700 border border-yellow-200"
+          }`}
+        >
+          {isRealAnalysis ? (
+            <CheckCircle className="w-4 h-4" />
+          ) : (
+            <AlertTriangle className="w-4 h-4" />
+          )}
+          <span>
+            {isRealAnalysis
+              ? "Real Analysis Results"
+              : "Demo Data (Mock Analysis)"}
+          </span>
+        </div>
       </div>
 
       {/* Export Buttons */}

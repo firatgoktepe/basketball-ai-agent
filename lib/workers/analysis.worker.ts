@@ -54,8 +54,12 @@ async function initializeModels() {
 
 async function analyzeVideo(options: any) {
   try {
+    console.log("Starting video analysis with options:", options);
+
     // Initialize models
+    console.log("Initializing models...");
     await initializeModels();
+    console.log("Models initialized successfully");
 
     const {
       videoFile,
@@ -64,33 +68,50 @@ async function analyzeVideo(options: any) {
       enableBallDetection,
       enablePoseEstimation,
       enable3ptEstimation,
-      onProgress,
     } = options;
 
     // Step 1: Extract frames
-    onProgress({
-      stage: "sampling",
-      progress: 10,
-      message: "Extracting video frames...",
+    self.postMessage({
+      type: "progress",
+      data: {
+        stage: "sampling",
+        progress: 10,
+        message: "Extracting video frames...",
+      },
     });
+    console.log(
+      `Extracting frames from ${videoFile.name} at ${samplingRate} fps`
+    );
     const frames = await extractFrames(videoFile, samplingRate);
+    console.log(`Extracted ${frames.length} frames`);
 
     // Step 2: Person detection and team clustering
-    onProgress({
-      stage: "detection",
-      progress: 30,
-      message: "Detecting players and clustering teams...",
+    self.postMessage({
+      type: "progress",
+      data: {
+        stage: "detection",
+        progress: 30,
+        message: "Detecting players and clustering teams...",
+      },
     });
+    console.log("Running person detection...");
     const personDetections = await detectPersons(frames, cocoModel);
+    console.log(`Detected persons in ${personDetections.length} frames`);
+
+    console.log("Clustering teams...");
     const teamClusters = await clusterTeams(personDetections, frames);
+    console.log("Team clusters:", teamClusters);
 
     // Step 3: Ball detection (if enabled)
     let ballDetections: any[] = [];
     if (enableBallDetection) {
-      onProgress({
-        stage: "detection",
-        progress: 50,
-        message: "Detecting ball movement...",
+      self.postMessage({
+        type: "progress",
+        data: {
+          stage: "detection",
+          progress: 50,
+          message: "Detecting ball movement...",
+        },
       });
       ballDetections = await detectBall(frames, onnxBallDetector);
     }
@@ -99,10 +120,13 @@ async function analyzeVideo(options: any) {
     let poseDetections: any[] = [];
     let shotAttempts: any[] = [];
     if (enablePoseEstimation && moveNetModel) {
-      onProgress({
-        stage: "detection",
-        progress: 60,
-        message: "Analyzing player poses...",
+      self.postMessage({
+        type: "progress",
+        data: {
+          stage: "detection",
+          progress: 60,
+          message: "Analyzing player poses...",
+        },
       });
       poseDetections = await extractPoses(frames, moveNetModel);
 
@@ -111,10 +135,13 @@ async function analyzeVideo(options: any) {
     }
 
     // Step 5: OCR on scoreboard
-    onProgress({
-      stage: "ocr",
-      progress: 80,
-      message: "Reading scoreboard...",
+    self.postMessage({
+      type: "progress",
+      data: {
+        stage: "ocr",
+        progress: 80,
+        message: "Reading scoreboard...",
+      },
     });
     const ocrResults = await processFramesWithOCR(frames, {
       cropRegion,
@@ -126,11 +153,15 @@ async function analyzeVideo(options: any) {
     });
 
     // Step 6: Event fusion
-    onProgress({
-      stage: "fusion",
-      progress: 90,
-      message: "Processing events...",
+    self.postMessage({
+      type: "progress",
+      data: {
+        stage: "fusion",
+        progress: 90,
+        message: "Processing events...",
+      },
     });
+    console.log("Running event fusion...");
     const events = await fuseEvents({
       personDetections,
       ballDetections,
@@ -140,14 +171,20 @@ async function analyzeVideo(options: any) {
       teamClusters,
       enable3ptEstimation,
     });
+    console.log(`Generated ${events.length} events`);
 
     // Step 7: Generate final results
-    onProgress({
-      stage: "results",
-      progress: 100,
-      message: "Generating results...",
+    self.postMessage({
+      type: "progress",
+      data: {
+        stage: "results",
+        progress: 100,
+        message: "Generating results...",
+      },
     });
+    console.log("Generating final game data...");
     const gameData = generateGameData(videoFile, teamClusters, events);
+    console.log("Analysis complete:", gameData);
 
     return gameData;
   } catch (error) {
@@ -156,11 +193,87 @@ async function analyzeVideo(options: any) {
   }
 }
 
-function generateGameData(videoFile: any, teamClusters: any, events: any[]) {
-  const teams = [
-    { id: "teamA", label: "Blue", color: "#0033cc" },
-    { id: "teamB", label: "Red", color: "#cc0000" },
+function generateTeamDataFromClusters(teamClusters: any) {
+  // Default teams if clustering failed
+  const defaultTeams = [
+    { id: "teamA", label: "Team A", color: "#0033cc" },
+    { id: "teamB", label: "Team B", color: "#cc0000" },
   ];
+
+  if (!teamClusters || typeof teamClusters !== "object") {
+    console.log("No valid team clusters, using default teams");
+    return defaultTeams;
+  }
+
+  // If teamClusters is just teamA/teamB strings, use defaults
+  if (
+    typeof teamClusters.teamA === "string" &&
+    typeof teamClusters.teamB === "string"
+  ) {
+    console.log("Team clusters are strings, using default teams");
+    return defaultTeams;
+  }
+
+  // If we have actual cluster data with centroids, extract colors
+  if (Array.isArray(teamClusters) && teamClusters.length >= 2) {
+    const teamA =
+      teamClusters.find((c) => c.teamId === "teamA") || teamClusters[0];
+    const teamB =
+      teamClusters.find((c) => c.teamId === "teamB") || teamClusters[1];
+
+    const teamAColor = teamA.centroid
+      ? rgbToHex(teamA.centroid.r, teamA.centroid.g, teamA.centroid.b)
+      : "#0033cc";
+    const teamBColor = teamB.centroid
+      ? rgbToHex(teamB.centroid.r, teamB.centroid.g, teamB.centroid.b)
+      : "#cc0000";
+
+    const teamALabel = getColorName(teamA.centroid || { r: 0, g: 51, b: 204 });
+    const teamBLabel = getColorName(teamB.centroid || { r: 204, g: 0, b: 0 });
+
+    console.log("Generated teams from clusters:", {
+      teamA: { label: teamALabel, color: teamAColor },
+      teamB: { label: teamBLabel, color: teamBColor },
+    });
+
+    return [
+      { id: "teamA", label: teamALabel, color: teamAColor },
+      { id: "teamB", label: teamBLabel, color: teamBColor },
+    ];
+  }
+
+  console.log("Unexpected team clusters format, using default teams");
+  return defaultTeams;
+}
+
+function rgbToHex(r: number, g: number, b: number): string {
+  const toHex = (n: number) => {
+    const hex = Math.round(n).toString(16);
+    return hex.length === 1 ? "0" + hex : hex;
+  };
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+function getColorName(rgb: { r: number; g: number; b: number }): string {
+  const { r, g, b } = rgb;
+
+  // Simple color name mapping based on RGB values
+  if (r > 200 && g < 100 && b < 100) return "Red";
+  if (r < 100 && g < 100 && b > 200) return "Blue";
+  if (r > 200 && g > 200 && b < 100) return "Yellow";
+  if (r < 100 && g > 200 && b < 100) return "Green";
+  if (r < 100 && g < 100 && b < 100) return "Black";
+  if (r > 200 && g > 200 && b > 200) return "White";
+  if (r > 150 && g > 100 && b < 100) return "Orange";
+  if (r > 150 && g < 100 && b > 150) return "Purple";
+
+  // If no specific color matches, return a descriptive name
+  return `Team (${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
+}
+
+function generateGameData(videoFile: any, teamClusters: any, events: any[]) {
+  // Use actual detected team colors instead of hardcoded ones
+  const teams = generateTeamDataFromClusters(teamClusters);
 
   const summary = {
     teamA: {

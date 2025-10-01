@@ -25,6 +25,14 @@ export function VideoPlayer({
   cropRegion,
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Debug: Log video element creation
+  useEffect(() => {
+    console.log(
+      "🎬 VideoPlayer: Component mounted, videoRef:",
+      videoRef.current
+    );
+  }, []);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -100,6 +108,12 @@ export function VideoPlayer({
   const handleLoadedMetadata = useCallback(() => {
     if (videoRef.current) {
       const videoDuration = videoRef.current.duration;
+      console.log("✅ Video metadata loaded:", {
+        duration: videoDuration,
+        videoWidth: videoRef.current.videoWidth,
+        videoHeight: videoRef.current.videoHeight,
+        src: videoRef.current.src,
+      });
       setDuration(videoDuration);
       onDurationChange?.(videoDuration);
       setShowQualityCheck(true);
@@ -108,14 +122,21 @@ export function VideoPlayer({
 
   const handleError = useCallback(
     (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
-      console.error("Video error:", e);
+      console.error("❌ Video error:", e);
       const target = e.target as HTMLVideoElement;
-      console.error("Video error details:", {
+      const errorDetails = {
         error: target.error,
         networkState: target.networkState,
         readyState: target.readyState,
         src: target.src,
-      });
+        videoWidth: target.videoWidth,
+        videoHeight: target.videoHeight,
+        duration: target.duration,
+      };
+      console.error("❌ Video error details:", errorDetails);
+
+      // Show error to user
+      alert(`Video loading error: ${target.error?.message || "Unknown error"}`);
     },
     []
   );
@@ -145,6 +166,24 @@ export function VideoPlayer({
     setIsCropModeActive(!isCropModeActive);
   }, [isCropModeActive]);
 
+  // Debug: Log when videoFile changes
+  useEffect(() => {
+    console.log("🎬 VideoPlayer: videoFile changed:", videoFile);
+    if (videoFile) {
+      console.log("🎬 VideoPlayer: Setting video src to:", videoFile.url);
+    }
+  }, [videoFile]);
+
+  // Debug: Log when video element is attached to DOM
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video) {
+      console.log("🎬 VideoPlayer: Video element attached to DOM:", video);
+      console.log("🎬 VideoPlayer: Video src attribute:", video.src);
+      console.log("🎬 VideoPlayer: Video readyState:", video.readyState);
+    }
+  }, [videoFile]);
+
   return (
     <div className="space-y-4">
       {/* Quality Check */}
@@ -163,6 +202,10 @@ export function VideoPlayer({
           className="w-full h-auto max-h-[60vh]"
           onTimeUpdate={handleTimeUpdate}
           onLoadedMetadata={handleLoadedMetadata}
+          onLoadStart={() =>
+            console.log("🔄 Video load started:", videoFile.url)
+          }
+          onCanPlay={() => console.log("▶️ Video can play:", videoFile.url)}
           onPlay={() => setIsPlaying(true)}
           onPause={() => setIsPlaying(false)}
           onMouseEnter={() => setShowControls(true)}
