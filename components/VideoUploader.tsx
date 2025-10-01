@@ -84,7 +84,7 @@ export function VideoUploader({ onVideoSelect }: VideoUploaderProps) {
     <div className="w-full">
       <div
         className={`
-          relative border-2 border-dashed rounded-lg p-8 text-center transition-colors
+          relative border-2 border-dashed rounded-lg p-4 sm:p-6 lg:p-8 text-center transition-colors
           ${
             isDragOver
               ? "border-primary bg-primary/5"
@@ -103,20 +103,20 @@ export function VideoUploader({ onVideoSelect }: VideoUploaderProps) {
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
         />
 
-        <div className="space-y-4">
-          <div className="mx-auto w-16 h-16 bg-muted rounded-full flex items-center justify-center">
-            <FileVideo className="w-8 h-8 text-muted-foreground" />
+        <div className="space-y-3 sm:space-y-4">
+          <div className="mx-auto w-12 h-12 sm:w-16 sm:h-16 bg-muted rounded-full flex items-center justify-center">
+            <FileVideo className="w-6 h-6 sm:w-8 sm:h-8 text-muted-foreground" />
           </div>
 
           <div>
-            <h3 className="text-lg font-semibold mb-2">
+            <h3 className="text-base sm:text-lg font-semibold mb-2">
               Upload Basketball Video
             </h3>
-            <p className="text-muted-foreground mb-4">
+            <p className="text-sm sm:text-base text-muted-foreground mb-3 sm:mb-4 px-2">
               Drag and drop your video file here, or click to browse
             </p>
-            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-              <Upload className="w-4 h-4" />
+            <div className="flex items-center justify-center gap-2 text-xs sm:text-sm text-muted-foreground">
+              <Upload className="w-3 h-3 sm:w-4 sm:h-4" />
               <span>MP4 files up to 500MB</span>
             </div>
           </div>
@@ -124,15 +124,17 @@ export function VideoUploader({ onVideoSelect }: VideoUploaderProps) {
       </div>
 
       {error && (
-        <div className="mt-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg flex items-center gap-2 text-destructive">
-          <AlertCircle className="w-4 h-4" />
+        <div className="mt-4 p-3 sm:p-4 bg-destructive/10 border border-destructive/20 rounded-lg flex items-center gap-2 text-destructive">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
           <span className="text-sm">{error}</span>
         </div>
       )}
 
-      <div className="mt-6 p-4 bg-muted/50 rounded-lg">
-        <h4 className="font-medium mb-2">Recommended Video Quality:</h4>
-        <ul className="text-sm text-muted-foreground space-y-1">
+      <div className="mt-4 sm:mt-6 p-3 sm:p-4 bg-muted/50 rounded-lg">
+        <h4 className="font-medium mb-2 text-sm sm:text-base">
+          Recommended Video Quality:
+        </h4>
+        <ul className="text-xs sm:text-sm text-muted-foreground space-y-1">
           <li>• Resolution: 720p or higher</li>
           <li>• Clear, steady footage (avoid shaky camera)</li>
           <li>• Good lighting conditions</li>

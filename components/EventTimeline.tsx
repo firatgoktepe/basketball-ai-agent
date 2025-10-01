@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import {
   Play,
   Pause,
@@ -8,17 +8,27 @@ import {
   Target,
   Trophy,
   AlertTriangle,
+  Clock,
+  SkipBack,
+  SkipForward,
 } from "lucide-react";
 import type { GameData, VideoFile } from "@/types";
 
 interface EventTimelineProps {
   gameData: GameData;
   videoFile: VideoFile;
+  onSeekToTime?: (time: number) => void;
 }
 
-export function EventTimeline({ gameData, videoFile }: EventTimelineProps) {
+export function EventTimeline({
+  gameData,
+  videoFile,
+  onSeekToTime,
+}: EventTimelineProps) {
   const [selectedEvent, setSelectedEvent] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const formatTime = (time: number) => {
@@ -70,13 +80,19 @@ export function EventTimeline({ gameData, videoFile }: EventTimelineProps) {
       // Seek video to event time
       if (videoRef.current) {
         videoRef.current.currentTime = event.timestamp;
+        setCurrentTime(event.timestamp);
         if (!isPlaying) {
           videoRef.current.play();
           setIsPlaying(true);
         }
       }
+
+      // Call parent callback if provided
+      if (onSeekToTime) {
+        onSeekToTime(event.timestamp);
+      }
     },
-    [isPlaying]
+    [isPlaying, onSeekToTime]
   );
 
   const handlePlayPause = useCallback(() => {
@@ -89,6 +105,44 @@ export function EventTimeline({ gameData, videoFile }: EventTimelineProps) {
       setIsPlaying(!isPlaying);
     }
   }, [isPlaying]);
+
+  const handleSeek = useCallback((time: number) => {
+    if (videoRef.current) {
+      videoRef.current.currentTime = time;
+      setCurrentTime(time);
+    }
+  }, []);
+
+  const handleSkipBackward = useCallback(() => {
+    if (videoRef.current) {
+      const newTime = Math.max(0, currentTime - 10);
+      handleSeek(newTime);
+    }
+  }, [currentTime, handleSeek]);
+
+  const handleSkipForward = useCallback(() => {
+    if (videoRef.current) {
+      const newTime = Math.min(duration, currentTime + 10);
+      handleSeek(newTime);
+    }
+  }, [currentTime, duration, handleSeek]);
+
+  // Update current time as video plays
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const updateTime = () => setCurrentTime(video.currentTime);
+    const updateDuration = () => setDuration(video.duration);
+
+    video.addEventListener("timeupdate", updateTime);
+    video.addEventListener("loadedmetadata", updateDuration);
+
+    return () => {
+      video.removeEventListener("timeupdate", updateTime);
+      video.removeEventListener("loadedmetadata", updateDuration);
+    };
+  }, []);
 
   const sortedEvents = [...gameData.events].sort(
     (a, b) => a.timestamp - b.timestamp
@@ -106,18 +160,128 @@ export function EventTimeline({ gameData, videoFile }: EventTimelineProps) {
           onPause={() => setIsPlaying(false)}
         />
 
-        {/* Play/Pause Overlay */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <button
-            onClick={handlePlayPause}
-            className="bg-black/50 text-white rounded-full p-3 hover:bg-black/70 transition-colors"
-          >
-            {isPlaying ? (
-              <Pause className="w-6 h-6" />
-            ) : (
-              <Play className="w-6 h-6" />
-            )}
-          </button>
+        {/* Enhanced Video Controls */}
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
+          <div className="flex items-center gap-4">
+            {/* Play/Pause Button */}
+            <button
+              onClick={handlePlayPause}
+              className="bg-white/20 text-white rounded-full p-2 hover:bg-white/30 transition-colors"
+            >
+              {isPlaying ? (
+                <Pause className="w-5 h-5" />
+              ) : (
+                <Play className="w-5 h-5" />
+              )}
+            </button>
+
+            {/* Skip Buttons */}
+            <button
+              onClick={handleSkipBackward}
+              className="bg-white/20 text-white rounded-full p-2 hover:bg-white/30 transition-colors"
+            >
+              <SkipBack className="w-4 h-4" />
+            </button>
+            <button
+              onClick={handleSkipForward}
+              className="bg-white/20 text-white rounded-full p-2 hover:bg-white/30 transition-colors"
+            >
+              <SkipForward className="w-4 h-4" />
+            </button>
+
+            {/* Time Display */}
+            <div className="flex items-center gap-2 text-white text-sm">
+              <Clock className="w-4 h-4" />
+              <span>{formatTime(currentTime)}</span>
+              <span>/</span>
+              <span>{formatTime(duration)}</span>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="flex-1 relative">
+              <div className="w-full h-2 bg-white/30 rounded-full">
+                <div
+                  className="h-2 bg-white rounded-full transition-all duration-100"
+                  style={{
+                    width: `${
+                      duration > 0 ? (currentTime / duration) * 100 : 0
+                    }%`,
+                  }}
+                />
+              </div>
+              {/* Event Markers on Progress Bar */}
+              {sortedEvents.map((event) => (
+                <button
+                  key={event.id}
+                  onClick={() => handleEventClick(event)}
+                  className={`absolute top-1/2 transform -translate-y-1/2 w-3 h-3 rounded-full border-2 border-white transition-all hover:scale-125 ${
+                    selectedEvent === event.id ? "ring-2 ring-yellow-400" : ""
+                  }`}
+                  style={{ left: `${(event.timestamp / duration) * 100}%` }}
+                  title={`${event.type} at ${formatTime(event.timestamp)}`}
+                >
+                  <div
+                    className={`w-full h-full rounded-full ${getEventColor(
+                      event.type
+                    )
+                      .split(" ")[0]
+                      .replace("bg-", "bg-")
+                      .replace("-100", "-500")}`}
+                  />
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Visual Timeline */}
+      <div className="bg-card border rounded-lg p-4">
+        <h3 className="text-lg font-semibold mb-4">Event Timeline</h3>
+        <div className="relative">
+          <div className="h-16 bg-gray-100 rounded-lg relative overflow-hidden">
+            {/* Timeline Background */}
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full h-1 bg-gray-300 rounded-full" />
+            </div>
+
+            {/* Event Markers */}
+            {sortedEvents.map((event) => {
+              const position = (event.timestamp / duration) * 100;
+              const team = gameData.teams.find((t) => t.id === event.teamId);
+              const isSelected = selectedEvent === event.id;
+
+              return (
+                <button
+                  key={event.id}
+                  onClick={() => handleEventClick(event)}
+                  className={`absolute top-1/2 transform -translate-y-1/2 transition-all hover:scale-110 ${
+                    isSelected ? "z-10" : ""
+                  }`}
+                  style={{ left: `${position}%` }}
+                  title={`${event.type} - ${team?.label} at ${formatTime(
+                    event.timestamp
+                  )}`}
+                >
+                  <div className={`relative ${isSelected ? "scale-125" : ""}`}>
+                    {getEventIcon(event.type)}
+                    <div
+                      className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-white ${
+                        isSelected ? "ring-2 ring-yellow-400" : ""
+                      }`}
+                      style={{ backgroundColor: team?.color }}
+                    />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Timeline Labels */}
+          <div className="flex justify-between mt-2 text-xs text-muted-foreground">
+            <span>0:00</span>
+            <span>{formatTime(duration)}</span>
+          </div>
         </div>
       </div>
 

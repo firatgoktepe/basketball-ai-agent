@@ -13,6 +13,12 @@ import {
   Cell,
   LineChart,
   Line,
+  Area,
+  AreaChart,
+  Scatter,
+  ScatterChart,
+  ComposedChart,
+  Legend,
 } from "recharts";
 import type { GameData } from "@/types";
 
@@ -25,6 +31,39 @@ export function StatisticsCharts({ gameData }: StatisticsChartsProps) {
   const teamB = gameData.teams[1];
   const summaryA = gameData.summary[teamA.id];
   const summaryB = gameData.summary[teamB.id];
+
+  // Enhanced data processing
+  const eventTypeCounts = gameData.events.reduce((acc, event) => {
+    acc[event.type] = (acc[event.type] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const teamEventCounts = gameData.events.reduce((acc, event) => {
+    const team = gameData.teams.find((t) => t.id === event.teamId);
+    if (!team) return acc;
+
+    if (!acc[team.label]) {
+      acc[team.label] = {};
+    }
+    acc[team.label][event.type] = (acc[team.label][event.type] || 0) + 1;
+    return acc;
+  }, {} as Record<string, Record<string, number>>);
+
+  // Shot efficiency data
+  const shotEfficiencyData = gameData.teams.map((team) => {
+    const teamEvents = gameData.events.filter((e) => e.teamId === team.id);
+    const shots = teamEvents.filter((e) => e.type === "shot_attempt").length;
+    const scores = teamEvents.filter((e) => e.type === "score").length;
+    const efficiency = shots > 0 ? (scores / shots) * 100 : 0;
+
+    return {
+      team: team.label,
+      shots,
+      scores,
+      efficiency: Math.round(efficiency * 10) / 10,
+      color: team.color,
+    };
+  });
 
   // Prepare data for charts
   const teamComparisonData = [
@@ -108,154 +147,248 @@ export function StatisticsCharts({ gameData }: StatisticsChartsProps) {
   };
 
   return (
-    <div className="space-y-8">
-      {/* Team Comparison Bar Chart */}
-      <div className="bg-card border rounded-lg p-6">
-        <h3 className="text-lg font-semibold mb-4">
-          Team Statistics Comparison
-        </h3>
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={teamComparisonData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="category" />
-            <YAxis />
-            <Tooltip />
-            <Bar dataKey={teamA.label} fill={teamA.color} />
-            <Bar dataKey={teamB.label} fill={teamB.color} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-
-      {/* Event Distribution Pie Chart */}
-      <div className="bg-card border rounded-lg p-6">
-        <h3 className="text-lg font-semibold mb-4">Event Distribution</h3>
-        <ResponsiveContainer width="100%" height={300}>
-          <PieChart>
-            <Pie
-              data={eventTypeData}
-              cx="50%"
-              cy="50%"
-              labelLine={false}
-              label={({ name, percent }) =>
-                `${name} ${(percent * 100).toFixed(0)}%`
-              }
-              outerRadius={80}
-              fill="#8884d8"
-              dataKey="value"
-            >
-              {eventTypeData.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={entry.color} />
-              ))}
-            </Pie>
-            <Tooltip />
-          </PieChart>
-        </ResponsiveContainer>
-      </div>
-
-      {/* Score Progression Line Chart */}
-      {scoreProgression.length > 0 && (
-        <div className="bg-card border rounded-lg p-6">
-          <h3 className="text-lg font-semibold mb-4">Score Progression</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={scoreProgression}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="timestamp" tickFormatter={formatTime} />
-              <YAxis />
-              <Tooltip
-                labelFormatter={(value) => `Time: ${formatTime(value)}`}
-              />
-              <Line
-                type="monotone"
-                dataKey={teamA.label}
-                stroke={teamA.color}
-                strokeWidth={2}
-                dot={{ fill: teamA.color }}
-              />
-              <Line
-                type="monotone"
-                dataKey={teamB.label}
-                stroke={teamB.color}
-                strokeWidth={2}
-                dot={{ fill: teamB.color }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
+    <div className="space-y-6">
+      {/* Responsive Grid Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Team Comparison Bar Chart */}
+        <div className="bg-card border rounded-lg p-4 lg:p-6">
+          <h3 className="text-lg font-semibold mb-4">
+            Team Statistics Comparison
+          </h3>
+          <div className="h-64 lg:h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={teamComparisonData}
+                margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis
+                  dataKey="category"
+                  angle={-45}
+                  textAnchor="end"
+                  height={60}
+                  fontSize={12}
+                />
+                <YAxis />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "hsl(var(--background))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "6px",
+                  }}
+                />
+                <Legend />
+                <Bar
+                  dataKey={teamA.label}
+                  fill={teamA.color}
+                  name={teamA.label}
+                />
+                <Bar
+                  dataKey={teamB.label}
+                  fill={teamB.color}
+                  name={teamB.label}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
-      )}
 
-      {/* Confidence Distribution */}
-      <div className="bg-card border rounded-lg p-6">
-        <h3 className="text-lg font-semibold mb-4">
-          Event Confidence Distribution
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="text-center">
-            <div className="text-2xl font-bold text-green-600">
-              {gameData.events.filter((e) => e.confidence >= 0.8).length}
-            </div>
-            <div className="text-sm text-muted-foreground">
-              High Confidence (≥80%)
-            </div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-yellow-600">
-              {
-                gameData.events.filter(
-                  (e) => e.confidence >= 0.5 && e.confidence < 0.8
-                ).length
-              }
-            </div>
-            <div className="text-sm text-muted-foreground">
-              Medium Confidence (50-79%)
-            </div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-red-600">
-              {gameData.events.filter((e) => e.confidence < 0.5).length}
-            </div>
-            <div className="text-sm text-muted-foreground">
-              Low Confidence (&lt;50%)
-            </div>
+        {/* Shot Efficiency Chart */}
+        <div className="bg-card border rounded-lg p-4 lg:p-6">
+          <h3 className="text-lg font-semibold mb-4">Shot Efficiency</h3>
+          <div className="h-64 lg:h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={shotEfficiencyData}
+                layout="horizontal"
+                margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis type="number" domain={[0, 100]} />
+                <YAxis dataKey="team" type="category" />
+                <Tooltip
+                  formatter={(value, name) => [`${value}%`, "Efficiency"]}
+                  contentStyle={{
+                    backgroundColor: "hsl(var(--background))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "6px",
+                  }}
+                />
+                <Bar dataKey="efficiency" fill="#8884d8" />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </div>
       </div>
 
-      {/* Analysis Quality Metrics */}
-      <div className="bg-card border rounded-lg p-6">
-        <h3 className="text-lg font-semibold mb-4">Analysis Quality</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <h4 className="font-medium mb-2">Detection Sources</h4>
-            <div className="space-y-2">
-              {Object.entries(
-                gameData.events.reduce((acc, event) => {
-                  acc[event.source] = (acc[event.source] || 0) + 1;
-                  return acc;
-                }, {} as Record<string, number>)
-              ).map(([source, count]) => (
-                <div key={source} className="flex justify-between text-sm">
-                  <span className="capitalize">{source.replace("_", " ")}</span>
-                  <span>{count} events</span>
+      {/* Event Distribution and Score Progression */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Event Distribution Pie Chart */}
+        <div className="bg-card border rounded-lg p-4 lg:p-6">
+          <h3 className="text-lg font-semibold mb-4">Event Distribution</h3>
+          <div className="h-64 lg:h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={eventTypeData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, percent }) =>
+                    `${name} ${(percent * 100).toFixed(0)}%`
+                  }
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {eventTypeData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "hsl(var(--background))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "6px",
+                  }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Score Progression Line Chart */}
+        {scoreProgression.length > 0 && (
+          <div className="bg-card border rounded-lg p-4 lg:p-6">
+            <h3 className="text-lg font-semibold mb-4">Score Progression</h3>
+            <div className="h-64 lg:h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={scoreProgression}
+                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="timestamp"
+                    tickFormatter={formatTime}
+                    fontSize={12}
+                  />
+                  <YAxis />
+                  <Tooltip
+                    labelFormatter={(value) => `Time: ${formatTime(value)}`}
+                    contentStyle={{
+                      backgroundColor: "hsl(var(--background))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: "6px",
+                    }}
+                  />
+                  <Legend />
+                  <Line
+                    type="monotone"
+                    dataKey={teamA.label}
+                    stroke={teamA.color}
+                    strokeWidth={2}
+                    dot={{ fill: teamA.color, r: 4 }}
+                    name={teamA.label}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey={teamB.label}
+                    stroke={teamB.color}
+                    strokeWidth={2}
+                    dot={{ fill: teamB.color, r: 4 }}
+                    name={teamB.label}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Confidence Distribution and Analysis Quality */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Confidence Distribution */}
+        <div className="bg-card border rounded-lg p-4 lg:p-6">
+          <h3 className="text-lg font-semibold mb-4">
+            Event Confidence Distribution
+          </h3>
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="text-center p-4 bg-green-50 rounded-lg border border-green-200">
+                <div className="text-2xl font-bold text-green-600">
+                  {gameData.events.filter((e) => e.confidence >= 0.8).length}
                 </div>
-              ))}
+                <div className="text-sm text-green-700">
+                  High Confidence (≥80%)
+                </div>
+              </div>
+              <div className="text-center p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                <div className="text-2xl font-bold text-yellow-600">
+                  {
+                    gameData.events.filter(
+                      (e) => e.confidence >= 0.5 && e.confidence < 0.8
+                    ).length
+                  }
+                </div>
+                <div className="text-sm text-yellow-700">
+                  Medium Confidence (50-79%)
+                </div>
+              </div>
+              <div className="text-center p-4 bg-red-50 rounded-lg border border-red-200">
+                <div className="text-2xl font-bold text-red-600">
+                  {gameData.events.filter((e) => e.confidence < 0.5).length}
+                </div>
+                <div className="text-sm text-red-700">
+                  Low Confidence (&lt;50%)
+                </div>
+              </div>
             </div>
           </div>
+        </div>
 
-          <div>
-            <h4 className="font-medium mb-2">Average Confidence</h4>
-            <div className="text-3xl font-bold text-primary">
-              {Math.round(
-                (gameData.events.reduce(
-                  (sum, event) => sum + event.confidence,
-                  0
-                ) /
-                  gameData.events.length) *
-                  100
-              )}
-              %
+        {/* Analysis Quality Metrics */}
+        <div className="bg-card border rounded-lg p-4 lg:p-6">
+          <h3 className="text-lg font-semibold mb-4">Analysis Quality</h3>
+          <div className="space-y-6">
+            <div>
+              <h4 className="font-medium mb-3">Detection Sources</h4>
+              <div className="space-y-2">
+                {Object.entries(
+                  gameData.events.reduce((acc, event) => {
+                    acc[event.source] = (acc[event.source] || 0) + 1;
+                    return acc;
+                  }, {} as Record<string, number>)
+                ).map(([source, count]) => (
+                  <div
+                    key={source}
+                    className="flex justify-between items-center p-2 bg-muted/50 rounded"
+                  >
+                    <span className="capitalize text-sm">
+                      {source.replace("_", " ")}
+                    </span>
+                    <span className="text-sm font-medium">{count} events</span>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="text-sm text-muted-foreground mt-1">
-              Overall detection confidence
+
+            <div className="text-center p-4 bg-primary/10 rounded-lg">
+              <h4 className="font-medium mb-2">Average Confidence</h4>
+              <div className="text-3xl font-bold text-primary">
+                {Math.round(
+                  (gameData.events.reduce(
+                    (sum, event) => sum + event.confidence,
+                    0
+                  ) /
+                    gameData.events.length) *
+                    100
+                )}
+                %
+              </div>
+              <div className="text-sm text-muted-foreground mt-1">
+                Overall detection confidence
+              </div>
             </div>
           </div>
         </div>

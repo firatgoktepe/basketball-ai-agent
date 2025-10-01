@@ -42,15 +42,17 @@ export function ProcessingControls({
   };
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="w-full space-y-4 sm:space-y-6">
       <div className="text-center">
-        <h3 className="text-xl font-semibold mb-2">Analysis Settings</h3>
-        <p className="text-muted-foreground">
+        <h3 className="text-lg sm:text-xl font-semibold mb-2">
+          Analysis Settings
+        </h3>
+        <p className="text-sm sm:text-base text-muted-foreground px-4">
           Configure the analysis parameters for your video
         </p>
       </div>
 
-      <div className="bg-card border rounded-lg p-6 space-y-6">
+      <div className="bg-card border rounded-lg p-4 sm:p-6 space-y-4 sm:space-y-6">
         {/* Sampling Rate */}
         <div>
           <label className="block text-sm font-medium mb-3">
@@ -66,9 +68,12 @@ export function ProcessingControls({
               className="w-full"
             />
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>1 FPS (Faster)</span>
-              <span>2 FPS (Balanced)</span>
-              <span>3 FPS (More Accurate)</span>
+              <span className="hidden sm:inline">1 FPS (Faster)</span>
+              <span className="sm:hidden">1 FPS</span>
+              <span className="hidden sm:inline">2 FPS (Balanced)</span>
+              <span className="sm:hidden">2 FPS</span>
+              <span className="hidden sm:inline">3 FPS (More Accurate)</span>
+              <span className="sm:hidden">3 FPS</span>
             </div>
           </div>
           <p className="text-xs text-muted-foreground mt-2">
@@ -165,17 +170,17 @@ export function ProcessingControls({
         )}
 
         {/* Start Analysis Button */}
-        <div className="pt-4">
+        <div className="pt-2 sm:pt-4">
           <button
             onClick={handleStartAnalysis}
             disabled={disabled}
-            className="w-full py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2 font-medium"
+            className="w-full py-3 sm:py-4 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2 font-medium text-sm sm:text-base"
           >
-            <Play className="w-5 h-5" />
+            <Play className="w-4 h-4 sm:w-5 sm:h-5" />
             Start Analysis
           </button>
 
-          <p className="text-xs text-muted-foreground text-center mt-2">
+          <p className="text-xs text-muted-foreground text-center mt-2 px-2">
             Estimated processing time: ~{getEstimatedTime()}x video duration
           </p>
         </div>

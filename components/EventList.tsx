@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import {
   Trophy,
   Target,
@@ -9,14 +9,22 @@ import {
   Edit,
   Check,
   X,
+  Save,
+  Trash2,
 } from "lucide-react";
-import type { GameData } from "@/types";
+import type { GameData, GameEvent } from "@/types";
 
 interface EventListProps {
   gameData: GameData;
+  onEventUpdate?: (eventId: string, updates: Partial<GameEvent>) => void;
+  onEventDelete?: (eventId: string) => void;
 }
 
-export function EventList({ gameData }: EventListProps) {
+export function EventList({
+  gameData,
+  onEventUpdate,
+  onEventDelete,
+}: EventListProps) {
   const [editingEvent, setEditingEvent] = useState<string | null>(null);
   const [filter, setFilter] = useState<
     "all" | "high_confidence" | "low_confidence"
@@ -24,6 +32,7 @@ export function EventList({ gameData }: EventListProps) {
   const [sortBy, setSortBy] = useState<"timestamp" | "confidence" | "type">(
     "timestamp"
   );
+  const [editForm, setEditForm] = useState<Partial<GameEvent>>({});
 
   const getEventIcon = (eventType: string) => {
     switch (eventType) {
@@ -86,18 +95,58 @@ export function EventList({ gameData }: EventListProps) {
     }
   });
 
-  const handleEditEvent = (eventId: string) => {
-    setEditingEvent(eventId);
-  };
+  const handleEditEvent = useCallback(
+    (eventId: string) => {
+      const event = gameData.events.find((e) => e.id === eventId);
+      if (event) {
+        setEditingEvent(eventId);
+        setEditForm({
+          type: event.type,
+          teamId: event.teamId,
+          timestamp: event.timestamp,
+          confidence: event.confidence,
+          scoreDelta: event.scoreDelta,
+          notes: event.notes,
+        });
+      }
+    },
+    [gameData.events]
+  );
 
-  const handleSaveEdit = (eventId: string) => {
-    // TODO: Implement event editing functionality
-    setEditingEvent(null);
-  };
+  const handleSaveEdit = useCallback(
+    (eventId: string) => {
+      if (onEventUpdate) {
+        onEventUpdate(eventId, editForm);
+      }
+      setEditingEvent(null);
+      setEditForm({});
+    },
+    [editForm, onEventUpdate]
+  );
 
-  const handleCancelEdit = () => {
+  const handleCancelEdit = useCallback(() => {
     setEditingEvent(null);
-  };
+    setEditForm({});
+  }, []);
+
+  const handleDeleteEvent = useCallback(
+    (eventId: string) => {
+      if (
+        onEventDelete &&
+        confirm("Are you sure you want to delete this event?")
+      ) {
+        onEventDelete(eventId);
+      }
+    },
+    [onEventDelete]
+  );
+
+  const handleFormChange = useCallback((field: keyof GameEvent, value: any) => {
+    setEditForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -225,29 +274,51 @@ export function EventList({ gameData }: EventListProps) {
               )}
 
               {isEditing && (
-                <div className="mt-4 p-3 bg-white border rounded">
-                  <div className="text-sm text-muted-foreground mb-2">
-                    Event editing functionality will be implemented in future
-                    updates.
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="mt-4 p-4 bg-muted/30 border rounded-lg">
+                  <h4 className="font-medium mb-3">Edit Event</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {/* Event Type */}
                     <div>
-                      <label className="block text-xs font-medium mb-1">
+                      <label className="block text-sm font-medium mb-1">
                         Event Type
                       </label>
-                      <select className="w-full px-2 py-1 border rounded text-xs">
-                        <option value={event.type}>{event.type}</option>
+                      <select
+                        value={editForm.type || event.type}
+                        onChange={(e) =>
+                          handleFormChange("type", e.target.value)
+                        }
+                        className="w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+                      >
                         <option value="shot_attempt">Shot Attempt</option>
                         <option value="score">Score</option>
-                        <option value="rebound">Rebound</option>
+                        <option value="missed_shot">Missed Shot</option>
+                        <option value="offensive_rebound">
+                          Offensive Rebound
+                        </option>
+                        <option value="defensive_rebound">
+                          Defensive Rebound
+                        </option>
                         <option value="turnover">Turnover</option>
+                        <option value="steal">Steal</option>
+                        <option value="3pt">3-Point Shot</option>
+                        <option value="long_distance_attempt">
+                          Long Distance Attempt
+                        </option>
                       </select>
                     </div>
+
+                    {/* Team */}
                     <div>
-                      <label className="block text-xs font-medium mb-1">
+                      <label className="block text-sm font-medium mb-1">
                         Team
                       </label>
-                      <select className="w-full px-2 py-1 border rounded text-xs">
+                      <select
+                        value={editForm.teamId || event.teamId}
+                        onChange={(e) =>
+                          handleFormChange("teamId", e.target.value)
+                        }
+                        className="w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+                      >
                         {gameData.teams.map((team) => (
                           <option key={team.id} value={team.id}>
                             {team.label}
@@ -255,6 +326,109 @@ export function EventList({ gameData }: EventListProps) {
                         ))}
                       </select>
                     </div>
+
+                    {/* Timestamp */}
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        Timestamp (seconds)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={editForm.timestamp || event.timestamp}
+                        onChange={(e) =>
+                          handleFormChange(
+                            "timestamp",
+                            parseFloat(e.target.value)
+                          )
+                        }
+                        className="w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+                      />
+                    </div>
+
+                    {/* Confidence */}
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        Confidence (0-1)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="1"
+                        value={editForm.confidence || event.confidence}
+                        onChange={(e) =>
+                          handleFormChange(
+                            "confidence",
+                            parseFloat(e.target.value)
+                          )
+                        }
+                        className="w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+                      />
+                    </div>
+
+                    {/* Score Delta (only for score events) */}
+                    {(editForm.type === "score" || event.type === "score") && (
+                      <div>
+                        <label className="block text-sm font-medium mb-1">
+                          Score Delta
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="3"
+                          value={editForm.scoreDelta || event.scoreDelta || ""}
+                          onChange={(e) =>
+                            handleFormChange(
+                              "scoreDelta",
+                              parseInt(e.target.value)
+                            )
+                          }
+                          className="w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+                        />
+                      </div>
+                    )}
+
+                    {/* Notes */}
+                    <div className="md:col-span-2 lg:col-span-3">
+                      <label className="block text-sm font-medium mb-1">
+                        Notes
+                      </label>
+                      <textarea
+                        value={editForm.notes || event.notes || ""}
+                        onChange={(e) =>
+                          handleFormChange("notes", e.target.value)
+                        }
+                        rows={2}
+                        className="w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-primary focus:border-primary resize-none"
+                        placeholder="Add notes about this event..."
+                      />
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-2 mt-4">
+                    <button
+                      onClick={() => handleSaveEdit(event.id)}
+                      className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors text-sm"
+                    >
+                      <Save className="w-4 h-4" />
+                      Save Changes
+                    </button>
+                    <button
+                      onClick={() => handleCancelEdit()}
+                      className="flex items-center gap-2 px-3 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors text-sm"
+                    >
+                      <X className="w-4 h-4" />
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => handleDeleteEvent(event.id)}
+                      className="flex items-center gap-2 px-3 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors text-sm ml-auto"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete
+                    </button>
                   </div>
                 </div>
               )}
