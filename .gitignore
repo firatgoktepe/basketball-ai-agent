@@ -48,4 +48,5 @@ next-env.d.ts
 # Some unnecessary md's
 
 EVENT_FUSION_IMPLEMENTATION_SUMMARY.md
+TEST_COMPLETION_SUMMARY.md
 

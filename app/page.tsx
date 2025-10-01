@@ -6,9 +6,13 @@ import { VideoUploader } from "@/components/VideoUploader";
 import { ProcessingControls } from "@/components/ProcessingControls";
 import { ProgressIndicator } from "@/components/ProgressIndicator";
 import { ResultsDisplay } from "@/components/ResultsDisplay";
+import { HelpDialog } from "@/components/HelpDialog";
+import { PrivacyNotice } from "@/components/PrivacyNotice";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import type { CropRegion } from "@/types";
 import { AnalysisWorker } from "@/lib/workers/AnalysisWorker";
 import { generateDemoGameData } from "@/lib/demo-data";
+import { handleError } from "@/lib/utils/error-handler";
 import type {
   VideoFile,
   AnalysisProgress,
@@ -168,105 +172,115 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-4 sm:py-8">
-        <header className="mb-6 sm:mb-8">
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-center mb-3 sm:mb-4">
-            Basketball Quick Stats
-          </h1>
-          <p className="text-center text-muted-foreground max-w-2xl mx-auto text-sm sm:text-base px-4">
-            AI-powered basketball game analysis tool. Upload a video, crop the
-            scoreboard, and get detailed game statistics automatically extracted
-            from the footage.
-          </p>
-        </header>
+    <ErrorBoundary>
+      <div className="min-h-screen bg-background">
+        <div className="container mx-auto px-4 py-4 sm:py-8">
+          <header className="mb-6 sm:mb-8">
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-center mb-3 sm:mb-4">
+              Basketball Quick Stats
+            </h1>
+            <p className="text-center text-muted-foreground max-w-2xl mx-auto text-sm sm:text-base px-4">
+              AI-powered basketball game analysis tool. Upload a video, crop the
+              scoreboard, and get detailed game statistics automatically
+              extracted from the footage.
+            </p>
+          </header>
 
-        <main className="space-y-6 sm:space-y-8">
-          {/* Video Upload Section */}
-          {!videoFile && (
-            <div className="max-w-2xl mx-auto space-y-4 px-4">
-              <VideoUploader onVideoSelect={handleVideoSelect} />
+          <main className="space-y-6 sm:space-y-8">
+            {/* Video Upload Section */}
+            {!videoFile && (
+              <div className="max-w-2xl mx-auto space-y-4 px-4">
+                <VideoUploader onVideoSelect={handleVideoSelect} />
 
-              {/* Demo Button */}
-              <div className="text-center space-y-2">
-                <button
-                  onClick={loadDemoVideo}
-                  className="px-4 sm:px-6 py-2 sm:py-3 border border-primary text-primary rounded-lg hover:bg-primary/10 transition-colors text-sm sm:text-base"
-                >
-                  Load Demo Video (for testing)
-                </button>
-                <p className="text-xs text-muted-foreground">
-                  Use this to test the interface with a sample video
-                </p>
-              </div>
-            </div>
-          )}
+                {/* Privacy Notice on Upload Page */}
+                <PrivacyNotice />
 
-          {/* Video Player and Controls */}
-          {videoFile && (
-            <div className="space-y-4 sm:space-y-6">
-              <div className="max-w-4xl mx-auto px-4">
-                <VideoPlayer
-                  videoFile={videoFile}
-                  detections={personDetections}
-                  gameData={gameData}
-                  cropRegion={cropRegion}
-                  onCropRegionChange={handleCropRegionChange}
-                  onDurationChange={(duration) => {
-                    setVideoFile((prev) =>
-                      prev ? { ...prev, duration } : null
-                    );
-                  }}
-                />
-              </div>
-
-              {/* Crop Region Status */}
-              {cropRegion && (
-                <div className="text-center px-4">
-                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-100 text-green-800 rounded-lg">
-                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                    <span className="text-sm font-medium">
-                      Scoreboard region selected ({Math.round(cropRegion.width)}
-                      ×{Math.round(cropRegion.height)})
-                    </span>
-                  </div>
-                  <p className="text-xs sm:text-sm text-muted-foreground mt-2">
-                    Click the crop tool button on the video to adjust the region
+                {/* Demo Button */}
+                <div className="text-center space-y-2">
+                  <button
+                    onClick={loadDemoVideo}
+                    className="px-4 sm:px-6 py-2 sm:py-3 border border-primary text-primary rounded-lg hover:bg-primary/10 transition-colors text-sm sm:text-base"
+                  >
+                    Load Demo Video (for testing)
+                  </button>
+                  <p className="text-xs text-muted-foreground">
+                    Use this to test the interface with a sample video
                   </p>
                 </div>
-              )}
+              </div>
+            )}
 
-              {/* Processing Controls */}
-              {cropRegion && !isProcessing && !gameData && (
-                <div className="max-w-2xl mx-auto px-4">
-                  <ProcessingControls
-                    onStartAnalysis={handleStartAnalysis}
-                    disabled={!cropRegion}
-                  />
-                </div>
-              )}
-
-              {/* Progress Indicator */}
-              {isProcessing && progress && (
-                <div className="max-w-2xl mx-auto px-4">
-                  <ProgressIndicator progress={progress} />
-                </div>
-              )}
-
-              {/* Results Display */}
-              {gameData && (
-                <div className="max-w-6xl mx-auto px-4">
-                  <ResultsDisplay
-                    gameData={gameData}
+            {/* Video Player and Controls */}
+            {videoFile && (
+              <div className="space-y-4 sm:space-y-6">
+                <div className="max-w-4xl mx-auto px-4">
+                  <VideoPlayer
                     videoFile={videoFile}
                     detections={personDetections}
+                    gameData={gameData}
+                    cropRegion={cropRegion}
+                    onCropRegionChange={handleCropRegionChange}
+                    onDurationChange={(duration) => {
+                      setVideoFile((prev) =>
+                        prev ? { ...prev, duration } : null
+                      );
+                    }}
                   />
                 </div>
-              )}
-            </div>
-          )}
-        </main>
+
+                {/* Crop Region Status */}
+                {cropRegion && (
+                  <div className="text-center px-4">
+                    <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-100 text-green-800 rounded-lg">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      <span className="text-sm font-medium">
+                        Scoreboard region selected (
+                        {Math.round(cropRegion.width)}×
+                        {Math.round(cropRegion.height)})
+                      </span>
+                    </div>
+                    <p className="text-xs sm:text-sm text-muted-foreground mt-2">
+                      Click the crop tool button on the video to adjust the
+                      region
+                    </p>
+                  </div>
+                )}
+
+                {/* Processing Controls */}
+                {cropRegion && !isProcessing && !gameData && (
+                  <div className="max-w-2xl mx-auto px-4">
+                    <ProcessingControls
+                      onStartAnalysis={handleStartAnalysis}
+                      disabled={!cropRegion}
+                    />
+                  </div>
+                )}
+
+                {/* Progress Indicator */}
+                {isProcessing && progress && (
+                  <div className="max-w-2xl mx-auto px-4">
+                    <ProgressIndicator progress={progress} />
+                  </div>
+                )}
+
+                {/* Results Display */}
+                {gameData && (
+                  <div className="max-w-6xl mx-auto px-4">
+                    <ResultsDisplay
+                      gameData={gameData}
+                      videoFile={videoFile}
+                      detections={personDetections}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+          </main>
+
+          {/* Help Dialog */}
+          <HelpDialog />
+        </div>
       </div>
-    </div>
+    </ErrorBoundary>
   );
 }

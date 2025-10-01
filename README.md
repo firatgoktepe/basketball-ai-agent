@@ -70,9 +70,61 @@ This is a work in progress. Current implementation includes:
 - ✅ Scoreboard cropping tool
 - ✅ Processing controls and progress tracking
 - ✅ Results display with charts and timeline
+- ✅ Tooltips and help system
+- ✅ Video quality checker
+- ✅ Performance monitoring
+- ✅ Test infrastructure and evaluation framework
 - 🚧 AI model integration (in progress)
 - 🚧 Event detection algorithms (in progress)
 - 🚧 Performance optimization (in progress)
+
+## Testing
+
+The application includes a comprehensive testing framework for evaluating detection accuracy:
+
+### Running Tests
+
+```bash
+# Run test evaluation suite
+npm run test:eval
+
+# Run with specific configuration
+npm run test:eval -- --verbose
+```
+
+### Test Coverage
+
+- **Annotated test clips** with ground truth data
+- **Accuracy metrics**: Precision, recall, F1 scores for all event types
+- **Performance benchmarks**: Processing time and memory usage
+- **Quality thresholds**: Score OCR ≥95%, Team attribution ≥80%, Shot inference ≥60%
+
+See [TESTING.md](./TESTING.md) for detailed testing documentation.
+
+## Performance
+
+The application is optimized for client-side processing:
+
+- **Web Workers** isolate heavy computation from UI thread
+- **Lazy model loading** reduces initial bundle size
+- **Device capability detection** auto-adjusts settings
+- **Quality checker** warns about suboptimal footage
+- **Configurable sampling rates** balance accuracy vs. speed
+
+### Performance Targets
+
+- Process 2-minute 1080p clip at 1 FPS without freezing UI
+- Models loaded lazily on demand
+- Responsive design for all screen sizes
+- Export functionality works for large datasets
+
+## Help & Documentation
+
+Click the help button (?) in the bottom-right corner of the app for:
+
+- **Quick Start Guide**: Step-by-step usage instructions
+- **FAQ & Troubleshooting**: Common issues and solutions
+- **Privacy Information**: Data handling and security details
 
 ## License
 

@@ -4,6 +4,7 @@ import { useRef, useEffect, useState, useCallback } from "react";
 import { Play, Pause, Volume2, VolumeX, Maximize } from "lucide-react";
 import { PersonDetectionOverlay } from "./PersonDetectionOverlay";
 import { ScoreboardCropTool } from "./ScoreboardCropTool";
+import { VideoQualityCheck } from "./VideoQualityCheck";
 import type { VideoFile, DetectionResult, GameData, CropRegion } from "@/types";
 
 interface VideoPlayerProps {
@@ -31,6 +32,7 @@ export function VideoPlayer({
   const [isMuted, setIsMuted] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [isCropModeActive, setIsCropModeActive] = useState(false);
+  const [showQualityCheck, setShowQualityCheck] = useState(false);
 
   const formatTime = useCallback((time: number) => {
     const minutes = Math.floor(time / 60);
@@ -100,6 +102,7 @@ export function VideoPlayer({
       const videoDuration = videoRef.current.duration;
       setDuration(videoDuration);
       onDurationChange?.(videoDuration);
+      setShowQualityCheck(true);
     }
   }, [onDurationChange]);
 
@@ -143,128 +146,139 @@ export function VideoPlayer({
   }, [isCropModeActive]);
 
   return (
-    <div className="relative bg-black rounded-lg overflow-hidden group">
-      <video
-        ref={videoRef}
-        src={videoFile.url}
-        className="w-full h-auto max-h-[60vh]"
-        onTimeUpdate={handleTimeUpdate}
-        onLoadedMetadata={handleLoadedMetadata}
-        onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
-        onMouseEnter={() => setShowControls(true)}
-        onMouseLeave={() => setShowControls(false)}
-        onError={handleError}
-        controls
-        preload="metadata"
-      />
-
-      {/* Person Detection Overlay */}
-      {detections && detections.length > 0 && (
-        <PersonDetectionOverlay
-          videoFile={videoFile}
-          detections={detections}
-          gameData={gameData ?? null}
-          currentTime={currentTime}
+    <div className="space-y-4">
+      {/* Quality Check */}
+      {showQualityCheck && (
+        <VideoQualityCheck
+          videoElement={videoRef.current}
+          fileSize={videoFile.size}
+          fileName={videoFile.name}
         />
       )}
 
-      {/* Scoreboard Crop Tool */}
-      <ScoreboardCropTool
-        videoElement={videoRef.current}
-        onCropRegionChange={handleCropRegionChange}
-        isActive={isCropModeActive}
-        onToggle={handleToggleCropMode}
-      />
+      <div className="relative bg-black rounded-lg overflow-hidden group">
+        <video
+          ref={videoRef}
+          src={videoFile.url}
+          className="w-full h-auto max-h-[60vh]"
+          onTimeUpdate={handleTimeUpdate}
+          onLoadedMetadata={handleLoadedMetadata}
+          onPlay={() => setIsPlaying(true)}
+          onPause={() => setIsPlaying(false)}
+          onMouseEnter={() => setShowControls(true)}
+          onMouseLeave={() => setShowControls(false)}
+          onError={handleError}
+          controls
+          preload="metadata"
+        />
 
-      {/* Controls Overlay */}
-      <div
-        className={`
+        {/* Person Detection Overlay */}
+        {detections && detections.length > 0 && (
+          <PersonDetectionOverlay
+            videoFile={videoFile}
+            detections={detections}
+            gameData={gameData ?? null}
+            currentTime={currentTime}
+          />
+        )}
+
+        {/* Scoreboard Crop Tool */}
+        <ScoreboardCropTool
+          videoElement={videoRef.current}
+          onCropRegionChange={handleCropRegionChange}
+          isActive={isCropModeActive}
+          onToggle={handleToggleCropMode}
+        />
+
+        {/* Controls Overlay */}
+        <div
+          className={`
         absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4
         transition-opacity duration-300
         ${showControls ? "opacity-100" : "opacity-0"}
       `}
-      >
-        {/* Progress Bar */}
-        <div className="mb-4">
-          <input
-            type="range"
-            min="0"
-            max={duration || 0}
-            value={currentTime}
-            onChange={handleSeek}
-            className="w-full h-1 bg-white/30 rounded-lg appearance-none cursor-pointer slider"
-          />
-        </div>
-
-        {/* Control Buttons */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={handlePlayPause}
-              className="text-white hover:text-white/80 transition-colors"
-            >
-              {isPlaying ? (
-                <Pause className="w-6 h-6" />
-              ) : (
-                <Play className="w-6 h-6" />
-              )}
-            </button>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleMuteToggle}
-                className="text-white hover:text-white/80 transition-colors"
-              >
-                {isMuted ? (
-                  <VolumeX className="w-5 h-5" />
-                ) : (
-                  <Volume2 className="w-5 h-5" />
-                )}
-              </button>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.1"
-                value={isMuted ? 0 : volume}
-                onChange={handleVolumeChange}
-                className="w-20 h-1 bg-white/30 rounded-lg appearance-none cursor-pointer slider"
-              />
-            </div>
-
-            <span className="text-white text-sm">
-              {formatTime(currentTime)} / {formatTime(duration)}
-            </span>
+        >
+          {/* Progress Bar */}
+          <div className="mb-4">
+            <input
+              type="range"
+              min="0"
+              max={duration || 0}
+              value={currentTime}
+              onChange={handleSeek}
+              className="w-full h-1 bg-white/30 rounded-lg appearance-none cursor-pointer slider"
+            />
           </div>
 
-          <button
-            onClick={handleFullscreen}
-            className="text-white hover:text-white/80 transition-colors"
-          >
-            <Maximize className="w-5 h-5" />
-          </button>
-        </div>
-      </div>
+          {/* Control Buttons */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={handlePlayPause}
+                className="text-white hover:text-white/80 transition-colors"
+              >
+                {isPlaying ? (
+                  <Pause className="w-6 h-6" />
+                ) : (
+                  <Play className="w-6 h-6" />
+                )}
+              </button>
 
-      <style jsx>{`
-        .slider::-webkit-slider-thumb {
-          appearance: none;
-          width: 16px;
-          height: 16px;
-          border-radius: 50%;
-          background: white;
-          cursor: pointer;
-        }
-        .slider::-moz-range-thumb {
-          width: 16px;
-          height: 16px;
-          border-radius: 50%;
-          background: white;
-          cursor: pointer;
-          border: none;
-        }
-      `}</style>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleMuteToggle}
+                  className="text-white hover:text-white/80 transition-colors"
+                >
+                  {isMuted ? (
+                    <VolumeX className="w-5 h-5" />
+                  ) : (
+                    <Volume2 className="w-5 h-5" />
+                  )}
+                </button>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  value={isMuted ? 0 : volume}
+                  onChange={handleVolumeChange}
+                  className="w-20 h-1 bg-white/30 rounded-lg appearance-none cursor-pointer slider"
+                />
+              </div>
+
+              <span className="text-white text-sm">
+                {formatTime(currentTime)} / {formatTime(duration)}
+              </span>
+            </div>
+
+            <button
+              onClick={handleFullscreen}
+              className="text-white hover:text-white/80 transition-colors"
+            >
+              <Maximize className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        <style jsx>{`
+          .slider::-webkit-slider-thumb {
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: white;
+            cursor: pointer;
+          }
+          .slider::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: white;
+            cursor: pointer;
+            border: none;
+          }
+        `}</style>
+      </div>
     </div>
   );
 }

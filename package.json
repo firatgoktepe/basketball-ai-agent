@@ -13,6 +13,8 @@
     "lint:fix": "next lint --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "test:eval": "tsx lib/test-utils/run-evaluation.ts",
+    "test:eval:verbose": "tsx lib/test-utils/run-evaluation.ts --verbose",
     "clean": "rm -rf node_modules && rm -rf .next && rm -rf .turbo && rm -rf .cursor && rm -rf .vercel && rm -rf .env && rm -rf .env.local && rm -rf .env.development.local && rm -rf .env.test.local && rm -rf .env.production.local",
     "setup": "sh setup.sh",
     "dev:clean": "sh dev.sh",

@@ -3,6 +3,8 @@
 import { useCallback, useState } from "react";
 import { Upload, FileVideo, AlertCircle } from "lucide-react";
 import type { VideoFile } from "@/types";
+import { Tooltip } from "@/components/ui/Tooltip";
+import { HelpText } from "@/components/ui/HelpText";
 
 interface VideoUploaderProps {
   onVideoSelect: (file: File) => void;
@@ -130,18 +132,55 @@ export function VideoUploader({ onVideoSelect }: VideoUploaderProps) {
         </div>
       )}
 
-      <div className="mt-4 sm:mt-6 p-3 sm:p-4 bg-muted/50 rounded-lg">
-        <h4 className="font-medium mb-2 text-sm sm:text-base">
-          Recommended Video Quality:
-        </h4>
-        <ul className="text-xs sm:text-sm text-muted-foreground space-y-1">
-          <li>• Resolution: 720p or higher</li>
-          <li>• Clear, steady footage (avoid shaky camera)</li>
-          <li>• Good lighting conditions</li>
-          <li>• Visible scoreboard in the frame</li>
-          <li>• Duration: 2-10 minutes for best results</li>
-        </ul>
-      </div>
+      <HelpText variant="info" className="mt-4 sm:mt-6">
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <h4 className="font-medium text-sm sm:text-base">
+              Recommended Video Quality
+            </h4>
+            <Tooltip
+              content="Following these guidelines ensures the best accuracy for automatic detection. Lower quality footage may still work but with reduced accuracy."
+              icon="help"
+            />
+          </div>
+          <ul className="text-xs sm:text-sm space-y-1">
+            <li className="flex items-start gap-2">
+              <span>•</span>
+              <span>
+                <strong>Resolution:</strong> 720p or higher for clear details
+              </span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span>•</span>
+              <span>
+                <strong>Stability:</strong> Use steady camera or tripod (avoid
+                handheld shake)
+              </span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span>•</span>
+              <span>
+                <strong>Lighting:</strong> Good lighting for clear player and
+                ball visibility
+              </span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span>•</span>
+              <span>
+                <strong>Scoreboard:</strong> Must be visible and readable in the
+                frame
+              </span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span>•</span>
+              <span>
+                <strong>Duration:</strong> 2-10 minutes optimal for processing
+                time
+              </span>
+            </li>
+          </ul>
+        </div>
+      </HelpText>
     </div>
   );
 }

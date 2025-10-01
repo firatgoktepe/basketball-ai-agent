@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { Play, Settings, Zap } from "lucide-react";
+import { Tooltip, LabelWithTooltip } from "@/components/ui/Tooltip";
+import { HelpText } from "@/components/ui/HelpText";
 
 interface ProcessingControlsProps {
   onStartAnalysis: (options: {
@@ -55,9 +57,11 @@ export function ProcessingControls({
       <div className="bg-card border rounded-lg p-4 sm:p-6 space-y-4 sm:space-y-6">
         {/* Sampling Rate */}
         <div>
-          <label className="block text-sm font-medium mb-3">
-            Sampling Rate: {samplingRate} FPS
-          </label>
+          <LabelWithTooltip
+            label={`Sampling Rate: ${samplingRate} FPS`}
+            tooltip="Higher frame rates (FPS) provide more accurate detection but increase processing time. 1 FPS is recommended for most videos."
+            className="mb-3"
+          />
           <div className="space-y-2">
             <input
               type="range"
@@ -113,8 +117,14 @@ export function ProcessingControls({
                   onChange={(e) => setEnableBallDetection(e.target.checked)}
                   className="rounded"
                 />
-                <div>
-                  <div className="font-medium">Ball Detection</div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">Ball Detection</span>
+                    <Tooltip
+                      content="Uses computer vision to track the ball position and movement. Requires WebGPU support for optimal performance. Increases processing time by ~2x."
+                      icon="help"
+                    />
+                  </div>
                   <div className="text-xs text-muted-foreground">
                     Track ball movement for more accurate shot and rebound
                     detection
@@ -129,8 +139,14 @@ export function ProcessingControls({
                   onChange={(e) => setEnablePoseEstimation(e.target.checked)}
                   className="rounded"
                 />
-                <div>
-                  <div className="font-medium">Pose Estimation</div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">Pose Estimation</span>
+                    <Tooltip
+                      content="Analyzes player body poses to detect shooting motions. Improves shot attempt detection accuracy but adds processing overhead."
+                      icon="help"
+                    />
+                  </div>
                   <div className="text-xs text-muted-foreground">
                     Analyze player movements for shot attempt detection
                   </div>
@@ -144,8 +160,14 @@ export function ProcessingControls({
                   onChange={(e) => setEnable3ptEstimation(e.target.checked)}
                   className="rounded"
                 />
-                <div>
-                  <div className="font-medium">3-Point Estimation</div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">3-Point Estimation</span>
+                    <Tooltip
+                      content="Attempts to detect 3-point shots by estimating court geometry and shooter position. Currently experimental with lower accuracy. Requires clear court view."
+                      icon="help"
+                    />
+                  </div>
                   <div className="text-xs text-muted-foreground">
                     Detect 3-point shot attempts (experimental)
                   </div>

@@ -12,6 +12,10 @@ import {
   Save,
   Trash2,
 } from "lucide-react";
+import {
+  ConfidenceBadge,
+  ConfidenceIndicator,
+} from "@/components/ui/ConfidenceBadge";
 import type { GameData, GameEvent } from "@/types";
 
 interface EventListProps {
@@ -228,16 +232,11 @@ export function EventList({
                 </div>
 
                 <div className="flex items-center gap-3">
-                  {isLowConfidence && (
-                    <div className="flex items-center gap-1 text-yellow-600">
-                      <AlertTriangle className="w-4 h-4" />
-                      <span className="text-sm">Low Confidence</span>
-                    </div>
-                  )}
-
-                  <div className="text-sm">
-                    {Math.round(event.confidence * 100)}%
-                  </div>
+                  <ConfidenceIndicator
+                    confidence={event.confidence}
+                    source={event.source}
+                    notes={event.notes}
+                  />
 
                   <div className="flex gap-1">
                     {isEditing ? (
