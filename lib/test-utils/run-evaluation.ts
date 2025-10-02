@@ -20,12 +20,12 @@ async function testAnalyze(videoPath: string, options: any): Promise<GameData> {
   console.log(`⚙️  Options:`, options);
 
   // Simulate processing time
-  await new Promise(resolve => setTimeout(resolve, 100));
+  await new Promise((resolve) => setTimeout(resolve, 100));
 
   // Generate realistic test results based on the video path
   // This simulates what the analysis pipeline would detect
-  const isBroadcastClip = videoPath.includes('broadcast');
-  const isAmateurClip = videoPath.includes('amateur');
+  const isBroadcastClip = videoPath.includes("broadcast");
+  const isAmateurClip = videoPath.includes("amateur");
 
   // Generate events based on clip type
   const events: any[] = [];
@@ -40,7 +40,7 @@ async function testAnalyze(videoPath: string, options: any): Promise<GameData> {
         scoreDelta: 2,
         timestamp: 12.4,
         confidence: 0.95,
-        source: "ocr"
+        source: "ocr",
       },
       {
         id: "evt-002",
@@ -49,7 +49,7 @@ async function testAnalyze(videoPath: string, options: any): Promise<GameData> {
         scoreDelta: 3,
         timestamp: 28.7,
         confidence: 0.92,
-        source: "ocr"
+        source: "ocr",
       },
       {
         id: "evt-003",
@@ -58,7 +58,7 @@ async function testAnalyze(videoPath: string, options: any): Promise<GameData> {
         scoreDelta: 2,
         timestamp: 45.2,
         confidence: 0.88,
-        source: "ocr"
+        source: "ocr",
       },
       {
         id: "evt-004",
@@ -66,7 +66,7 @@ async function testAnalyze(videoPath: string, options: any): Promise<GameData> {
         teamId: "teamA",
         timestamp: 12.2,
         confidence: 0.75,
-        source: "pose+ball"
+        source: "pose+ball",
       },
       {
         id: "evt-005",
@@ -74,7 +74,7 @@ async function testAnalyze(videoPath: string, options: any): Promise<GameData> {
         teamId: "teamB",
         timestamp: 28.5,
         confidence: 0.82,
-        source: "pose+ball"
+        source: "pose+ball",
       }
     );
   } else if (isAmateurClip) {
@@ -87,7 +87,7 @@ async function testAnalyze(videoPath: string, options: any): Promise<GameData> {
         scoreDelta: 2,
         timestamp: 15.3,
         confidence: 0.78,
-        source: "ocr"
+        source: "ocr",
       },
       {
         id: "evt-002",
@@ -96,7 +96,7 @@ async function testAnalyze(videoPath: string, options: any): Promise<GameData> {
         scoreDelta: 2,
         timestamp: 42.1,
         confidence: 0.72,
-        source: "ocr"
+        source: "ocr",
       },
       {
         id: "evt-003",
@@ -104,25 +104,29 @@ async function testAnalyze(videoPath: string, options: any): Promise<GameData> {
         teamId: "teamA",
         timestamp: 15.1,
         confidence: 0.65,
-        source: "pose"
+        source: "pose",
       }
     );
   }
 
   // Calculate summary statistics from events
-  const teamAEvents = events.filter(e => e.teamId === "teamA");
-  const teamBEvents = events.filter(e => e.teamId === "teamB");
+  const teamAEvents = events.filter((e) => e.teamId === "teamA");
+  const teamBEvents = events.filter((e) => e.teamId === "teamB");
 
   const teamAPoints = teamAEvents
-    .filter(e => e.type === "score")
+    .filter((e) => e.type === "score")
     .reduce((sum, e) => sum + (e.scoreDelta || 0), 0);
 
   const teamBPoints = teamBEvents
-    .filter(e => e.type === "score")
+    .filter((e) => e.type === "score")
     .reduce((sum, e) => sum + (e.scoreDelta || 0), 0);
 
-  const teamAShotAttempts = teamAEvents.filter(e => e.type === "shot_attempt").length;
-  const teamBShotAttempts = teamBEvents.filter(e => e.type === "shot_attempt").length;
+  const teamAShotAttempts = teamAEvents.filter(
+    (e) => e.type === "shot_attempt"
+  ).length;
+  const teamBShotAttempts = teamBEvents.filter(
+    (e) => e.type === "shot_attempt"
+  ).length;
 
   return {
     video: {
@@ -130,8 +134,16 @@ async function testAnalyze(videoPath: string, options: any): Promise<GameData> {
       duration: isBroadcastClip ? 120 : 180,
     },
     teams: [
-      { id: "teamA", label: isBroadcastClip ? "Blue Team" : "Home", color: isBroadcastClip ? "#0033cc" : "#00ff00" },
-      { id: "teamB", label: isBroadcastClip ? "Red Team" : "Away", color: isBroadcastClip ? "#cc0000" : "#ff0000" },
+      {
+        id: "teamA",
+        label: isBroadcastClip ? "Blue Team" : "Home",
+        color: isBroadcastClip ? "#0033cc" : "#00ff00",
+      },
+      {
+        id: "teamB",
+        label: isBroadcastClip ? "Red Team" : "Away",
+        color: isBroadcastClip ? "#cc0000" : "#ff0000",
+      },
     ],
     events,
     summary: {

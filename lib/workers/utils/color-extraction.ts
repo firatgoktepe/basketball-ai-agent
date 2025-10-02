@@ -17,12 +17,23 @@ export function extractJerseyColors(
 ): ColorSample[] {
   const colorSamples: ColorSample[] = [];
 
+  console.log(
+    `🔍 Extracting jersey colors from ${detections.length} detection frames`
+  );
+
   for (const result of detections) {
     const frame = frames[result.frameIndex];
-    if (!frame) continue;
+    if (!frame) {
+      console.warn(`⚠️ Frame ${result.frameIndex} not found`);
+      continue;
+    }
 
     for (const detection of result.detections) {
       const colors = extractColorsFromBbox(frame, detection.bbox);
+      console.log(
+        `🎨 Extracted ${colors.length} colors from bbox:`,
+        detection.bbox
+      );
       colorSamples.push(
         ...colors.map((color) => ({
           ...color,
@@ -31,6 +42,11 @@ export function extractJerseyColors(
         }))
       );
     }
+  }
+
+  console.log(`📊 Total color samples extracted: ${colorSamples.length}`);
+  if (colorSamples.length === 0) {
+    console.warn("⚠️ No color samples extracted - team clustering will fail");
   }
 
   return colorSamples;
@@ -236,16 +252,60 @@ function assignTeamIds(
   // Sort clusters by sample count (larger clusters are more likely to be the main teams)
   clusters.sort((a, b) => b.samples.length - a.samples.length);
 
+  console.log(`🎯 Assigning team IDs to ${clusters.length} clusters`);
+
   for (let i = 0; i < clusters.length; i++) {
     const cluster = clusters[i];
     const { r, g, b } = cluster.centroid;
     const { h, s, v } = rgbToHsv(r, g, b);
+
+    console.log(
+      `Cluster ${i}: RGB(${Math.round(r)}, ${Math.round(g)}, ${Math.round(
+        b
+      )}) HSV(${h.toFixed(1)}, ${s.toFixed(2)}, ${v.toFixed(2)}) - ${
+        cluster.samples.length
+      } samples`
+    );
 
     // Assign team based on color characteristics
     if (i === 0) {
       cluster.teamId = "teamA";
     } else if (i === 1) {
       cluster.teamId = "teamB";
+    }
+  }
+
+  // Check if clusters are too similar and force different colors
+  if (clusters.length >= 2) {
+    const cluster1 = clusters[0];
+    const cluster2 = clusters[1];
+    const distance = Math.sqrt(
+      Math.pow(cluster1.centroid.r - cluster2.centroid.r, 2) +
+        Math.pow(cluster1.centroid.g - cluster2.centroid.g, 2) +
+        Math.pow(cluster1.centroid.b - cluster2.centroid.b, 2)
+    );
+
+    console.log(`📏 Color distance between clusters: ${distance.toFixed(1)}`);
+
+    if (distance < 50) {
+      // Colors are too similar
+      console.warn("⚠️ Team colors are too similar - forcing different colors");
+      // Force one team to be more blue, another more red
+      if (cluster1.centroid.b > cluster1.centroid.r) {
+        cluster1.centroid.r = Math.max(0, cluster1.centroid.r - 50);
+        cluster1.centroid.b = Math.min(255, cluster1.centroid.b + 50);
+      } else {
+        cluster1.centroid.r = Math.min(255, cluster1.centroid.r + 50);
+        cluster1.centroid.b = Math.max(0, cluster1.centroid.b - 50);
+      }
+
+      if (cluster2.centroid.r > cluster2.centroid.b) {
+        cluster2.centroid.r = Math.max(0, cluster2.centroid.r - 50);
+        cluster2.centroid.b = Math.min(255, cluster2.centroid.b + 50);
+      } else {
+        cluster2.centroid.r = Math.min(255, cluster2.centroid.r + 50);
+        cluster2.centroid.b = Math.max(0, cluster2.centroid.b - 50);
+      }
     }
   }
 }

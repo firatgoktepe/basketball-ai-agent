@@ -90,7 +90,8 @@ export async function fuseEvents(options: FusionOptions): Promise<GameEvent[]> {
 
   // Apply temporal smoothing and filter low-confidence events
   const smoothedEvents = applyTemporalSmoothing(events);
-  const filteredEvents = filterLowConfidenceEvents(smoothedEvents, 0.5);
+  // Lower confidence threshold to capture more events
+  const filteredEvents = filterLowConfidenceEvents(smoothedEvents, 0.3);
 
   // Sort events by timestamp
   return filteredEvents.sort((a, b) => a.timestamp - b.timestamp);
