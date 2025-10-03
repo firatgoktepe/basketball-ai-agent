@@ -208,14 +208,14 @@ export function ScoreboardCropTool({
             <div className="absolute bottom-4 left-4 flex gap-3">
               <button
                 onClick={handleClear}
-                className="bg-red-600 hover:bg-red-700 active:bg-red-800 text-white p-3 rounded-lg transition-colors touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center"
+                className="hidden md:flex bg-red-600 hover:bg-red-700 active:bg-red-800 text-white p-3 rounded-lg transition-colors touch-manipulation min-w-[44px] min-h-[44px] items-center justify-center"
                 title="Clear selection"
               >
                 <X className="w-5 h-5" />
               </button>
               <button
                 onClick={handleConfirm}
-                className="bg-green-600 hover:bg-green-700 active:bg-green-800 text-white p-3 rounded-lg transition-colors touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center"
+                className="hidden md:flex bg-green-600 hover:bg-green-700 active:bg-green-800 text-white p-3 rounded-lg transition-colors touch-manipulation min-w-[44px] min-h-[44px] items-center justify-center"
                 title="Confirm selection"
               >
                 <Check className="w-5 h-5" />
