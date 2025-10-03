@@ -29,15 +29,29 @@ export function ScoreboardCropTool({
   const overlayRef = useRef<HTMLDivElement>(null);
 
   const getRelativePosition = useCallback(
-    (e: React.MouseEvent) => {
+    (e: React.MouseEvent | React.TouchEvent) => {
       if (!overlayRef.current || !videoElement) return { x: 0, y: 0 };
 
       const rect = overlayRef.current.getBoundingClientRect();
       const videoRect = videoElement.getBoundingClientRect();
 
+      // Get coordinates from either mouse or touch event
+      let clientX: number, clientY: number;
+
+      if ("touches" in e && e.touches.length > 0) {
+        // Touch event
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+      } else {
+        // Mouse event
+        const mouseEvent = e as React.MouseEvent;
+        clientX = mouseEvent.clientX;
+        clientY = mouseEvent.clientY;
+      }
+
       // Calculate position relative to video element
-      const x = e.clientX - videoRect.left;
-      const y = e.clientY - videoRect.top;
+      const x = clientX - videoRect.left;
+      const y = clientY - videoRect.top;
 
       // Ensure coordinates are within video bounds
       const clampedX = Math.max(0, Math.min(x, videoRect.width));
@@ -48,8 +62,8 @@ export function ScoreboardCropTool({
     [videoElement]
   );
 
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
+  const handleStart = useCallback(
+    (e: React.MouseEvent | React.TouchEvent) => {
       if (!isActive || !videoElement) return;
 
       e.preventDefault();
@@ -61,37 +75,42 @@ export function ScoreboardCropTool({
     [isActive, videoElement, getRelativePosition]
   );
 
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent) => {
+  const handleMove = useCallback(
+    (e: React.MouseEvent | React.TouchEvent) => {
       if (!isDrawing || !startPoint) return;
 
+      e.preventDefault();
       const pos = getRelativePosition(e);
       setCurrentPoint(pos);
     },
     [isDrawing, startPoint, getRelativePosition]
   );
 
-  const handleMouseUp = useCallback(() => {
-    if (!isDrawing || !startPoint || !currentPoint) return;
+  const handleEnd = useCallback(
+    (e: React.MouseEvent | React.TouchEvent) => {
+      if (!isDrawing || !startPoint || !currentPoint) return;
 
-    setIsDrawing(false);
+      e.preventDefault();
+      setIsDrawing(false);
 
-    // Calculate crop region
-    const x = Math.min(startPoint.x, currentPoint.x);
-    const y = Math.min(startPoint.y, currentPoint.y);
-    const width = Math.abs(currentPoint.x - startPoint.x);
-    const height = Math.abs(currentPoint.y - startPoint.y);
+      // Calculate crop region
+      const x = Math.min(startPoint.x, currentPoint.x);
+      const y = Math.min(startPoint.y, currentPoint.y);
+      const width = Math.abs(currentPoint.x - startPoint.x);
+      const height = Math.abs(currentPoint.y - startPoint.y);
 
-    // Only create crop region if it's large enough
-    if (width > 10 && height > 10) {
-      const newCropRegion: CropRegion = { x, y, width, height };
-      setCropRegion(newCropRegion);
-      onCropRegionChange(newCropRegion);
-    }
+      // Only create crop region if it's large enough
+      if (width > 10 && height > 10) {
+        const newCropRegion: CropRegion = { x, y, width, height };
+        setCropRegion(newCropRegion);
+        onCropRegionChange(newCropRegion);
+      }
 
-    setStartPoint(null);
-    setCurrentPoint(null);
-  }, [isDrawing, startPoint, currentPoint, onCropRegionChange]);
+      setStartPoint(null);
+      setCurrentPoint(null);
+    },
+    [isDrawing, startPoint, currentPoint, onCropRegionChange]
+  );
 
   const handleClear = useCallback(() => {
     setCropRegion(null);
@@ -127,11 +146,11 @@ export function ScoreboardCropTool({
       <button
         onClick={onToggle}
         className={`
-          absolute top-4 right-4 z-20 p-2 rounded-lg transition-all duration-200
+          absolute top-4 right-4 z-20 p-3 rounded-lg transition-all duration-200 touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center
           ${
             isActive
               ? "bg-blue-600 text-white shadow-lg"
-              : "bg-white/90 text-gray-700 hover:bg-white shadow-md"
+              : "bg-white/90 text-gray-700 hover:bg-white active:bg-white shadow-md"
           }
         `}
         title={isActive ? "Exit crop mode" : "Crop scoreboard region"}
@@ -143,26 +162,32 @@ export function ScoreboardCropTool({
       {isActive && videoElement && (
         <div
           ref={overlayRef}
-          className="absolute inset-0 z-10 cursor-crosshair"
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
+          className="absolute inset-0 z-10 cursor-crosshair touch-none select-none"
+          onMouseDown={handleStart}
+          onMouseMove={handleMove}
+          onMouseUp={handleEnd}
           onMouseLeave={() => setIsDrawing(false)}
+          onTouchStart={handleStart}
+          onTouchMove={handleMove}
+          onTouchEnd={handleEnd}
+          onTouchCancel={() => setIsDrawing(false)}
         >
           {/* Instructions */}
-          <div className="absolute top-4 left-4 bg-black/80 text-white p-3 rounded-lg text-sm">
+          <div className="absolute top-4 left-4 bg-black/80 text-white p-3 rounded-lg text-sm max-w-xs">
             <p className="font-medium mb-1">Scoreboard Crop Tool</p>
             <p className="text-gray-300">
               {isDrawing
                 ? "Drag to select the scoreboard region"
-                : "Click and drag to select the scoreboard region"}
+                : "Touch and drag to select the scoreboard region"}
             </p>
           </div>
 
           {/* Current crop rectangle */}
           {currentRect && (
             <div
-              className="absolute border-2 border-blue-500 bg-blue-500/20 pointer-events-none"
+              className={`absolute border-2 border-blue-500 bg-blue-500/20 pointer-events-none transition-all duration-150 ${
+                isDrawing ? "border-blue-400 bg-blue-400/30" : ""
+              }`}
               style={{
                 left: currentRect.x,
                 top: currentRect.y,
@@ -170,30 +195,30 @@ export function ScoreboardCropTool({
                 height: currentRect.height,
               }}
             >
-              {/* Corner handles */}
-              <div className="absolute -top-1 -left-1 w-3 h-3 bg-blue-500 rounded-full" />
-              <div className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 rounded-full" />
-              <div className="absolute -bottom-1 -left-1 w-3 h-3 bg-blue-500 rounded-full" />
-              <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-blue-500 rounded-full" />
+              {/* Corner handles - larger for mobile */}
+              <div className="absolute -top-2 -left-2 w-4 h-4 bg-blue-500 rounded-full border-2 border-white shadow-lg" />
+              <div className="absolute -top-2 -right-2 w-4 h-4 bg-blue-500 rounded-full border-2 border-white shadow-lg" />
+              <div className="absolute -bottom-2 -left-2 w-4 h-4 bg-blue-500 rounded-full border-2 border-white shadow-lg" />
+              <div className="absolute -bottom-2 -right-2 w-4 h-4 bg-blue-500 rounded-full border-2 border-white shadow-lg" />
             </div>
           )}
 
           {/* Action buttons */}
           {cropRegion && (
-            <div className="absolute bottom-4 left-4 flex gap-2">
+            <div className="absolute bottom-4 left-4 flex gap-3">
               <button
                 onClick={handleClear}
-                className="bg-red-600 hover:bg-red-700 text-white p-2 rounded-lg transition-colors"
+                className="bg-red-600 hover:bg-red-700 active:bg-red-800 text-white p-3 rounded-lg transition-colors touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center"
                 title="Clear selection"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
               <button
                 onClick={handleConfirm}
-                className="bg-green-600 hover:bg-green-700 text-white p-2 rounded-lg transition-colors"
+                className="bg-green-600 hover:bg-green-700 active:bg-green-800 text-white p-3 rounded-lg transition-colors touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center"
                 title="Confirm selection"
               >
-                <Check className="w-4 h-4" />
+                <Check className="w-5 h-5" />
               </button>
             </div>
           )}
