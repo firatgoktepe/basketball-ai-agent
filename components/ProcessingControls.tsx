@@ -11,6 +11,7 @@ interface ProcessingControlsProps {
     enableBallDetection: boolean;
     enablePoseEstimation: boolean;
     enable3ptEstimation: boolean;
+    forceMockPoseModel?: boolean;
   }) => void;
   disabled?: boolean;
 }
@@ -24,6 +25,7 @@ export function ProcessingControls({
   const [enablePoseEstimation, setEnablePoseEstimation] = useState(false);
   const [enable3ptEstimation, setEnable3ptEstimation] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [forceMockPoseModel, setForceMockPoseModel] = useState(false);
 
   const handleStartAnalysis = () => {
     onStartAnalysis({
@@ -31,6 +33,7 @@ export function ProcessingControls({
       enableBallDetection,
       enablePoseEstimation,
       enable3ptEstimation,
+      forceMockPoseModel,
     });
   };
 
@@ -170,6 +173,30 @@ export function ProcessingControls({
                   </div>
                   <div className="text-xs text-muted-foreground">
                     Detect 3-point shot attempts (experimental)
+                  </div>
+                </div>
+              </label>
+
+              {/* Debug option for mock pose model */}
+              <label className="flex items-center gap-3 cursor-pointer opacity-60">
+                <input
+                  type="checkbox"
+                  checked={forceMockPoseModel}
+                  onChange={(e) => setForceMockPoseModel(e.target.checked)}
+                  className="rounded"
+                />
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-sm">
+                      Debug: Force Mock Pose Model
+                    </span>
+                    <Tooltip
+                      content="Force using mock pose detection for testing. This will generate fake poses instead of using the real MoveNet model. Only use for debugging."
+                      icon="help"
+                    />
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Use mock pose detection for testing (debug only)
                   </div>
                 </div>
               </label>

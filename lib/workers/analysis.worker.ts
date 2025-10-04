@@ -5,6 +5,16 @@ import Tesseract from "tesseract.js";
 // Import models and utilities
 import { loadCocoSSD } from "./models/coco-ssd";
 import { loadMoveNet, MoveNetPoseEstimator } from "./models/movenet";
+import { LocalMoveNetPoseEstimator } from "./models/movenet-local";
+
+// Function to load the local MoveNet implementation
+async function loadLocalMoveNet(
+  config: any
+): Promise<LocalMoveNetPoseEstimator> {
+  const estimator = new LocalMoveNetPoseEstimator(config);
+  await estimator.loadModel();
+  return estimator;
+}
 import {
   loadONNXBallDetector,
   isONNXAvailable,
@@ -19,16 +29,29 @@ import { fuseEvents } from "./utils/event-fusion";
 
 // Global state
 let cocoModel: any = null;
-let moveNetModel: MoveNetPoseEstimator | null = null;
+let moveNetModel: LocalMoveNetPoseEstimator | null = null;
 let onnxBallDetector: any = null;
 let isInitialized = false;
 
-async function initializeModels() {
+async function initializeModels(forceMockPoseModel = false) {
   if (isInitialized) return;
 
   try {
     // Load core models
-    const [coco, moveNet] = await Promise.all([loadCocoSSD(), loadMoveNet()]);
+    const moveNetConfig = forceMockPoseModel
+      ? {
+          modelType: "SinglePose.Lightning" as const,
+          forceMock: true,
+        }
+      : {
+          modelType: "SinglePose.Lightning" as const,
+          forceMock: false,
+        };
+
+    const [coco, moveNet] = await Promise.all([
+      loadCocoSSD(),
+      loadLocalMoveNet(moveNetConfig),
+    ]);
     cocoModel = coco;
     moveNetModel = moveNet;
 
@@ -56,11 +79,6 @@ async function analyzeVideo(options: any) {
   try {
     console.log("Starting video analysis with options:", options);
 
-    // Initialize models
-    console.log("Initializing models...");
-    await initializeModels();
-    console.log("Models initialized successfully");
-
     const {
       videoFile,
       cropRegion,
@@ -68,7 +86,13 @@ async function analyzeVideo(options: any) {
       enableBallDetection,
       enablePoseEstimation,
       enable3ptEstimation,
+      forceMockPoseModel,
     } = options;
+
+    // Initialize models
+    console.log("Initializing models...");
+    await initializeModels(forceMockPoseModel);
+    console.log("Models initialized successfully");
 
     // Step 1: Extract frames
     self.postMessage({
@@ -95,12 +119,42 @@ async function analyzeVideo(options: any) {
       },
     });
     console.log("Running person detection...");
+    self.postMessage({
+      type: "debug",
+      data: { message: "🔍 Running person detection..." },
+    });
+
     const personDetections = await detectPersons(frames, cocoModel);
     console.log(`Detected persons in ${personDetections.length} frames`);
+
+    self.postMessage({
+      type: "debug",
+      data: {
+        message: `📊 Detected persons in ${personDetections.length} frames`,
+      },
+    });
+
     if (personDetections.length === 0) {
       console.warn(
         "⚠️ No person detections found - this will affect team clustering and event detection"
       );
+      console.warn(
+        "🔍 This is likely why event fusion is failing and generating fallback events"
+      );
+
+      self.postMessage({
+        type: "debug",
+        data: {
+          message:
+            "⚠️ No person detections found - this will cause event fusion to fail",
+        },
+      });
+    } else {
+      console.log("✅ Person detection working - found detections");
+      self.postMessage({
+        type: "debug",
+        data: { message: "✅ Person detection working - found detections" },
+      });
     }
 
     console.log("Clustering teams...");
@@ -145,6 +199,27 @@ async function analyzeVideo(options: any) {
           message: "Analyzing player poses...",
         },
       });
+
+      // Check if we're using a mock model
+      if (moveNetModel.isUsingMockModel()) {
+        console.warn(
+          "⚠️ Using mock MoveNet model - pose detection will generate test poses!"
+        );
+        self.postMessage({
+          type: "debug",
+          data: {
+            message:
+              "⚠️ Using mock MoveNet model - pose detection will generate test poses for development",
+          },
+        });
+      } else {
+        console.log("✅ Using real MoveNet model for pose detection");
+        self.postMessage({
+          type: "debug",
+          data: { message: "✅ Using real MoveNet model for pose detection" },
+        });
+      }
+
       poseDetections = await extractPoses(frames, moveNetModel);
 
       // Detect shot attempts from poses
@@ -191,6 +266,47 @@ async function analyzeVideo(options: any) {
       ocrResults: ocrResults.length,
       teamClusters: teamClusters,
     });
+
+    self.postMessage({
+      type: "debug",
+      data: {
+        message: `🔍 Event fusion inputs: persons=${personDetections.length}, ball=${ballDetections.length}, poses=${poseDetections.length}, shots=${shotAttempts.length}, ocr=${ocrResults.length}`,
+      },
+    });
+
+    // Debug: Check if we have any data at all
+    if (personDetections.length === 0) {
+      console.warn(
+        "⚠️ No person detections - this will cause event fusion to fail"
+      );
+      self.postMessage({
+        type: "debug",
+        data: {
+          message:
+            "⚠️ No person detections - this will cause event fusion to fail",
+        },
+      });
+    }
+    if (ocrResults.length === 0) {
+      console.warn("⚠️ No OCR results - this will cause event fusion to fail");
+      self.postMessage({
+        type: "debug",
+        data: {
+          message: "⚠️ No OCR results - this will cause event fusion to fail",
+        },
+      });
+    }
+    if (shotAttempts.length === 0) {
+      console.warn(
+        "⚠️ No shot attempts - this will cause event fusion to fail"
+      );
+      self.postMessage({
+        type: "debug",
+        data: {
+          message: "⚠️ No shot attempts - this will cause event fusion to fail",
+        },
+      });
+    }
     const events = await fuseEvents({
       personDetections,
       ballDetections,
@@ -201,15 +317,45 @@ async function analyzeVideo(options: any) {
       enable3ptEstimation,
     });
     console.log(`Generated ${events.length} events`);
+
+    self.postMessage({
+      type: "debug",
+      data: { message: `📊 Generated ${events.length} events` },
+    });
+
     if (events.length === 0) {
       console.warn(
         "⚠️ No events generated - this may indicate analysis pipeline issues"
       );
+      console.warn("🔍 Possible causes:");
+      console.warn("  - No person detections found");
+      console.warn("  - No OCR results (scoreboard not detected)");
+      console.warn("  - No shot attempts detected");
+      console.warn("  - All events filtered out due to low confidence");
       console.log("🔧 Generating fallback events to prevent empty results...");
+
+      self.postMessage({
+        type: "debug",
+        data: {
+          message: "⚠️ No events generated - generating fallback events",
+        },
+      });
+
       // Generate some basic fallback events to prevent completely empty results
       const fallbackEvents = generateFallbackEvents(videoFile, teamClusters);
       events.push(...fallbackEvents);
       console.log(`Added ${fallbackEvents.length} fallback events`);
+
+      self.postMessage({
+        type: "debug",
+        data: { message: `🔧 Added ${fallbackEvents.length} fallback events` },
+      });
+    } else {
+      console.log("✅ Event fusion successful - generated real events");
+      self.postMessage({
+        type: "debug",
+        data: { message: "✅ Event fusion successful - generated real events" },
+      });
     }
 
     // Step 7: Generate final results
@@ -348,7 +494,7 @@ function generateFallbackEvents(videoFile: any, teamClusters: any): any[] {
       type: eventType,
       teamId,
       timestamp,
-      confidence: 0.4, // Slightly higher confidence for fallback
+      confidence: 0.6, // Higher confidence for fallback events
       source: "fallback",
       notes: "Generated fallback event - analysis pipeline may have failed",
     };
@@ -371,7 +517,7 @@ function generateFallbackEvents(videoFile: any, teamClusters: any): any[] {
         type: "defensive_rebound",
         teamId: shotEvent.teamId === "teamA" ? "teamB" : "teamA",
         timestamp: shotEvent.timestamp + 2,
-        confidence: 0.3,
+        confidence: 0.5,
         source: "fallback",
         notes: "Generated fallback rebound",
       });
@@ -383,7 +529,7 @@ function generateFallbackEvents(videoFile: any, teamClusters: any): any[] {
       type: "turnover",
       teamId: "teamA",
       timestamp: duration * 0.6,
-      confidence: 0.3,
+      confidence: 0.5,
       source: "fallback",
       notes: "Generated fallback turnover",
     });

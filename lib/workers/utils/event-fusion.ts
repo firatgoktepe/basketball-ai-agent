@@ -90,8 +90,40 @@ export async function fuseEvents(options: FusionOptions): Promise<GameEvent[]> {
 
   // Apply temporal smoothing and filter low-confidence events
   const smoothedEvents = applyTemporalSmoothing(events);
-  // Lower confidence threshold to capture more events
+
+  // Debug: Log confidence values before filtering
+  console.log("🔍 Event confidence values before filtering:");
+  smoothedEvents.forEach((event, i) => {
+    console.log(
+      `  Event ${i}: ${event.type} - confidence: ${event.confidence.toFixed(3)}`
+    );
+  });
+
+  // Use moderate confidence threshold to capture real events
   const filteredEvents = filterLowConfidenceEvents(smoothedEvents, 0.3);
+
+  console.log(
+    `📊 Filtered ${smoothedEvents.length} events down to ${filteredEvents.length} events`
+  );
+
+  // Send debug info to main thread
+  if (typeof self !== "undefined" && self.postMessage) {
+    self.postMessage({
+      type: "debug",
+      data: {
+        message: `🔍 Event confidence values: ${smoothedEvents
+          .map((e) => `${e.type}:${e.confidence.toFixed(2)}`)
+          .join(", ")}`,
+      },
+    });
+
+    self.postMessage({
+      type: "debug",
+      data: {
+        message: `📊 Filtered ${smoothedEvents.length} events down to ${filteredEvents.length} events`,
+      },
+    });
+  }
 
   // Sort events by timestamp
   return filteredEvents.sort((a, b) => a.timestamp - b.timestamp);
@@ -197,7 +229,7 @@ function attributeScoreToTeam(
   );
 
   if (relevantFrames.length === 0) {
-    return { teamId: defaultTeam, confidence: 0.6 };
+    return { teamId: defaultTeam, confidence: 0.8 };
   }
 
   // Collect players near hoop area (assume hoop is in upper region of frame)
@@ -226,7 +258,7 @@ function attributeScoreToTeam(
   // Majority voting
   const totalVotes = teamVotes.teamA + teamVotes.teamB + teamVotes.unknown;
   if (totalVotes === 0) {
-    return { teamId: defaultTeam, confidence: 0.5 };
+    return { teamId: defaultTeam, confidence: 0.7 };
   }
 
   const teamAPercentage = teamVotes.teamA / totalVotes;
@@ -239,7 +271,7 @@ function attributeScoreToTeam(
     return { teamId: "teamB", confidence: Math.min(teamBPercentage, 0.95) };
   } else {
     // No clear majority, use default with lower confidence
-    return { teamId: defaultTeam, confidence: 0.6 };
+    return { teamId: defaultTeam, confidence: 0.8 };
   }
 }
 
@@ -408,7 +440,7 @@ function detectMissedShots(
         type: "missed_shot",
         teamId: shot.teamId,
         timestamp: shot.timestamp,
-        confidence: shot.confidence * 0.7, // Lower confidence for inferred event
+        confidence: shot.confidence * 0.85, // Slightly lower confidence for inferred event
         source: "inference",
         notes: "Shot attempt without subsequent score change",
       });
@@ -672,7 +704,7 @@ function trackPossessionChanges(
           timestamp: ballFrame.timestamp,
           fromTeam: lastPossession.teamId,
           toTeam: closestPlayer.teamId,
-          confidence: 0.6 + (isSudden ? 0.1 : 0), // Higher confidence for sudden changes
+          confidence: 0.75 + (isSudden ? 0.15 : 0), // Higher confidence for sudden changes
           isSudden,
         });
       }
@@ -755,9 +787,9 @@ function estimate3PointDistance(
 
     // If player is in lower part of frame (further from hoop), likely 3pt
     if (centerY > 0.6) {
-      return { isLongDistance: true, confidence: 0.5 };
+      return { isLongDistance: true, confidence: 0.7 };
     } else if (centerY > 0.5) {
-      return { isLongDistance: true, confidence: 0.3 };
+      return { isLongDistance: true, confidence: 0.5 };
     }
   }
 

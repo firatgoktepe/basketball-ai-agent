@@ -78,6 +78,7 @@ export default function Home() {
       enableBallDetection: boolean;
       enablePoseEstimation: boolean;
       enable3ptEstimation: boolean;
+      forceMockPoseModel?: boolean;
     }) => {
       if (!videoFile || !cropRegion) return;
 
@@ -109,6 +110,7 @@ export default function Home() {
             enableBallDetection: options.enableBallDetection,
             enablePoseEstimation: options.enablePoseEstimation,
             enable3ptEstimation: options.enable3ptEstimation,
+            forceMockPoseModel: options.forceMockPoseModel,
           },
           (progressData) => {
             setProgress(progressData);

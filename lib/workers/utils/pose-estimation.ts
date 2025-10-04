@@ -1,5 +1,6 @@
 import type { PoseResult } from "@/types";
 import type { MoveNetPoseEstimator, Pose } from "../models/movenet";
+import type { LocalMoveNetPoseEstimator } from "../models/movenet-local";
 
 export interface ShotAttempt {
   playerId: string;
@@ -19,9 +20,19 @@ export interface ShotAttempt {
 
 export async function extractPoses(
   frames: ImageData[],
-  model: MoveNetPoseEstimator
+  model: MoveNetPoseEstimator | LocalMoveNetPoseEstimator
 ): Promise<PoseResult[]> {
   const results: PoseResult[] = [];
+
+  // Debug: Log pose extraction start
+  if (typeof self !== "undefined" && self.postMessage) {
+    self.postMessage({
+      type: "debug",
+      data: {
+        message: `🔍 Starting pose extraction: ${frames.length} frames`,
+      },
+    });
+  }
 
   for (let i = 0; i < frames.length; i++) {
     const frame = frames[i];
@@ -44,6 +55,18 @@ export async function extractPoses(
           teamId: undefined, // Will be assigned during team clustering
         })),
       });
+
+      // Debug: Log pose extraction progress for first few frames
+      if (i < 5) {
+        if (typeof self !== "undefined" && self.postMessage) {
+          self.postMessage({
+            type: "debug",
+            data: {
+              message: `🔍 Frame ${i}: extracted ${poses.length} poses`,
+            },
+          });
+        }
+      }
     } catch (error) {
       console.error(`Pose estimation failed for frame ${i}:`, error);
       // Fallback to empty poses
@@ -53,6 +76,17 @@ export async function extractPoses(
         poses: [],
       });
     }
+  }
+
+  // Debug: Log pose extraction results
+  if (typeof self !== "undefined" && self.postMessage) {
+    const totalPoses = results.reduce((sum, r) => sum + r.poses.length, 0);
+    self.postMessage({
+      type: "debug",
+      data: {
+        message: `📊 Pose extraction complete: ${totalPoses} total poses across ${results.length} frames`,
+      },
+    });
   }
 
   return results;
@@ -65,13 +99,38 @@ export function detectShotAttempts(
   const shotAttempts: ShotAttempt[] = [];
   const shotDetectionWindow = 1.0; // 1 second window for shot detection
 
+  // Debug: Log shot detection start
+  if (typeof self !== "undefined" && self.postMessage) {
+    self.postMessage({
+      type: "debug",
+      data: {
+        message: `🔍 Starting shot detection: ${
+          poseResults.length
+        } pose frames, ${ballDetections?.length || 0} ball detections`,
+      },
+    });
+  }
+
   for (let i = 0; i < poseResults.length; i++) {
     const currentFrame = poseResults[i];
+
+    // Debug: Log pose frame info
+    if (i < 5) {
+      // Only log first 5 frames to avoid spam
+      if (typeof self !== "undefined" && self.postMessage) {
+        self.postMessage({
+          type: "debug",
+          data: {
+            message: `🔍 Frame ${i}: ${currentFrame.poses.length} poses detected`,
+          },
+        });
+      }
+    }
 
     for (const pose of currentFrame.poses) {
       const shotAttempt = analyzePoseForShot(pose, currentFrame.timestamp);
 
-      if (shotAttempt && shotAttempt.confidence > 0.6) {
+      if (shotAttempt && shotAttempt.confidence > 0.5) {
         // Check for ball proximity if ball detection is available
         if (ballDetections && ballDetections.length > 0) {
           const ballProximity = checkBallProximity(
@@ -95,6 +154,16 @@ export function detectShotAttempts(
         }
       }
     }
+  }
+
+  // Debug: Log shot detection results
+  if (typeof self !== "undefined" && self.postMessage) {
+    self.postMessage({
+      type: "debug",
+      data: {
+        message: `📊 Shot detection complete: found ${shotAttempts.length} shot attempts`,
+      },
+    });
   }
 
   return shotAttempts;
@@ -152,6 +221,15 @@ function analyzePoseForShot(
   );
 
   if (visibleKeypoints.length < 4) {
+    // Debug: Log insufficient keypoints
+    if (typeof self !== "undefined" && self.postMessage) {
+      self.postMessage({
+        type: "debug",
+        data: {
+          message: `⚠️ Insufficient keypoints for pose analysis: ${visibleKeypoints.length}/6 visible`,
+        },
+      });
+    }
     return null; // Not enough keypoints for analysis
   }
 
@@ -184,7 +262,32 @@ function analyzePoseForShot(
     rightElbow
   );
 
-  if (confidence > 0.6 && armElevation > 0.3) {
+  // Debug: Log pose analysis results
+  if (typeof self !== "undefined" && self.postMessage) {
+    self.postMessage({
+      type: "debug",
+      data: {
+        message: `🔍 Pose analysis: confidence=${confidence.toFixed(
+          3
+        )}, armElevation=${armElevation.toFixed(3)}, visibleKeypoints=${
+          visibleKeypoints.length
+        }/6`,
+      },
+    });
+  }
+
+  if (confidence > 0.5 && armElevation > 0.3) {
+    if (typeof self !== "undefined" && self.postMessage) {
+      self.postMessage({
+        type: "debug",
+        data: {
+          message: `✅ Shot attempt detected: confidence=${confidence.toFixed(
+            3
+          )}, form=${shootingForm}`,
+        },
+      });
+    }
+
     return {
       playerId: `player_${timestamp}`, // Simple ID generation
       timestamp,

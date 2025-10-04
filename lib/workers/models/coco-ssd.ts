@@ -86,6 +86,34 @@ export function realPersonDetection(imageData: ImageData): any[] {
   }
 
   console.log(`✅ Real detection found ${detections.length} persons`);
+  if (detections.length > 0) {
+    console.log("🔍 Person detection confidence values:");
+    detections.forEach((det, i) => {
+      console.log(`  Person ${i}: confidence: ${det.score.toFixed(3)}`);
+    });
+
+    // Send debug info to main thread
+    if (typeof self !== "undefined" && self.postMessage) {
+      self.postMessage({
+        type: "debug",
+        data: {
+          message: `🔍 Person detection confidence values: ${detections
+            .map((d) => d.score.toFixed(2))
+            .join(", ")}`,
+        },
+      });
+    }
+  } else {
+    // Send debug info to main thread
+    if (typeof self !== "undefined" && self.postMessage) {
+      self.postMessage({
+        type: "debug",
+        data: {
+          message: "⚠️ No persons detected in this frame",
+        },
+      });
+    }
+  }
   return detections;
 }
 
@@ -125,12 +153,20 @@ function analyzeImageForPersons(
 
       if (relativeArea >= 0.01 && relativeArea <= 0.3) {
         // 1% to 30% of image
+        // Calculate confidence based on shape quality and size
+        const shapeQuality = calculateShapeQuality(component, width, height);
+        const sizeQuality = calculateSizeQuality(component, width, height);
+        const confidence = Math.min(
+          0.95,
+          0.7 + shapeQuality * 0.15 + sizeQuality * 0.1
+        );
+
         regions.push({
           x: component.x,
           y: component.y,
           width: component.width,
           height: component.height,
-          confidence: 0.6 + Math.random() * 0.3, // 0.6-0.9 confidence
+          confidence: confidence,
         });
       }
     }
@@ -270,4 +306,56 @@ function floodFill(
     width: maxX - minX + 1,
     height: maxY - minY + 1,
   };
+}
+
+/**
+ * Calculate shape quality score for person detection
+ * Higher score for more human-like proportions
+ */
+function calculateShapeQuality(
+  component: { width: number; height: number },
+  imageWidth: number,
+  imageHeight: number
+): number {
+  const aspectRatio = component.width / component.height;
+
+  // Ideal person aspect ratio is around 0.4-0.5 (taller than wide)
+  const idealRatio = 0.45;
+  const ratioScore = 1 - Math.abs(aspectRatio - idealRatio) / idealRatio;
+
+  // Bonus for reasonable size
+  const area = component.width * component.height;
+  const imageArea = imageWidth * imageHeight;
+  const relativeArea = area / imageArea;
+
+  // Optimal size is around 5-15% of image
+  const optimalSize = 0.1;
+  const sizeScore = 1 - Math.abs(relativeArea - optimalSize) / optimalSize;
+
+  return Math.max(0, Math.min(1, (ratioScore + sizeScore) / 2));
+}
+
+/**
+ * Calculate size quality score for person detection
+ * Higher score for appropriate person size
+ */
+function calculateSizeQuality(
+  component: { width: number; height: number },
+  imageWidth: number,
+  imageHeight: number
+): number {
+  const area = component.width * component.height;
+  const imageArea = imageWidth * imageHeight;
+  const relativeArea = area / imageArea;
+
+  // Score based on how close to optimal person size (5-15% of image)
+  if (relativeArea >= 0.05 && relativeArea <= 0.15) {
+    return 1.0; // Perfect size
+  } else if (relativeArea >= 0.02 && relativeArea <= 0.25) {
+    return 0.8; // Good size
+  } else if (relativeArea >= 0.01 && relativeArea <= 0.3) {
+    return 0.6; // Acceptable size
+  } else {
+    return 0.3; // Poor size
+  }
 }

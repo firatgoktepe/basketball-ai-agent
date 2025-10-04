@@ -40,6 +40,10 @@ export class AnalysisWorker {
               onProgress(data);
             }
             break;
+          case "debug":
+            // Log debug messages from worker to main console
+            console.log(`[Worker Debug] ${data.message}`);
+            break;
           case "result":
             this.worker?.removeEventListener("message", handleMessage);
             resolve(data);
