@@ -5,6 +5,7 @@ import {
   clusterColorsByKMeans,
   assignTeamToDetection,
 } from "./color-extraction";
+import { realPersonDetection } from "../models/coco-ssd";
 
 export async function detectPersons(
   frames: ImageData[],
@@ -55,6 +56,16 @@ async function detectPersonsInFrame(
   Array<{ bbox: [number, number, number, number]; confidence: number }>
 > {
   try {
+    // Check if model is a real detector (has real_output layer)
+    if (
+      model &&
+      model.layers &&
+      model.layers.some((layer: any) => layer.name === "real_output")
+    ) {
+      console.log("🔧 Using real person detector for person detection");
+      return realPersonDetection(frame);
+    }
+
     // Convert ImageData to tensor
     const tensor = tf.browser.fromPixels(
       new ImageData(frame.data, frame.width, frame.height)
@@ -106,7 +117,8 @@ async function detectPersonsInFrame(
     return detections;
   } catch (error) {
     console.error("Error in detectPersonsInFrame:", error);
-    return [];
+    console.log("🔧 Falling back to real detection");
+    return realPersonDetection(frame);
   }
 }
 
