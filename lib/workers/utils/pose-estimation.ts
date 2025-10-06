@@ -104,9 +104,8 @@ export function detectShotAttempts(
     self.postMessage({
       type: "debug",
       data: {
-        message: `🔍 Starting shot detection: ${
-          poseResults.length
-        } pose frames, ${ballDetections?.length || 0} ball detections`,
+        message: `🔍 Starting shot detection: ${poseResults.length
+          } pose frames, ${ballDetections?.length || 0} ball detections`,
       },
     });
   }
@@ -216,17 +215,32 @@ function analyzePoseForShot(
     leftShoulder,
     rightShoulder,
   ];
+
+  // Debug: Log keypoint confidence values
+  if (typeof self !== "undefined" && self.postMessage) {
+    const keypointConfidences = requiredKeypoints.map((kp, i) =>
+      `${['leftWrist', 'rightWrist', 'leftElbow', 'rightElbow', 'leftShoulder', 'rightShoulder'][i]}: ${kp.confidence.toFixed(3)}`
+    ).join(', ');
+    self.postMessage({
+      type: "debug",
+      data: {
+        message: `🔍 Keypoint confidences: ${keypointConfidences}`,
+      },
+    });
+  }
+
+  // Lower confidence threshold to be more permissive
   const visibleKeypoints = requiredKeypoints.filter(
-    (kp) => kp.confidence > 0.3
+    (kp) => kp.confidence > 0.1  // Lowered from 0.3 to 0.1
   );
 
-  if (visibleKeypoints.length < 4) {
+  if (visibleKeypoints.length < 2) {  // Lowered from 4 to 2
     // Debug: Log insufficient keypoints
     if (typeof self !== "undefined" && self.postMessage) {
       self.postMessage({
         type: "debug",
         data: {
-          message: `⚠️ Insufficient keypoints for pose analysis: ${visibleKeypoints.length}/6 visible`,
+          message: `⚠️ Insufficient keypoints for pose analysis: ${visibleKeypoints.length}/6 visible (threshold: 0.1)`,
         },
       });
     }
@@ -269,14 +283,14 @@ function analyzePoseForShot(
       data: {
         message: `🔍 Pose analysis: confidence=${confidence.toFixed(
           3
-        )}, armElevation=${armElevation.toFixed(3)}, visibleKeypoints=${
-          visibleKeypoints.length
-        }/6`,
+        )}, armElevation=${armElevation.toFixed(3)}, visibleKeypoints=${visibleKeypoints.length
+          }/6`,
       },
     });
   }
 
-  if (confidence > 0.5 && armElevation > 0.3) {
+  // Lower the thresholds to be more permissive
+  if (confidence > 0.3 && armElevation > 0.2) { // Lowered from 0.5/0.3 to 0.3/0.2
     if (typeof self !== "undefined" && self.postMessage) {
       self.postMessage({
         type: "debug",
@@ -434,7 +448,7 @@ function checkBallProximity(
 
       const distance = Math.sqrt(
         (ballCenter.x - shootingHand.x) ** 2 +
-          (ballCenter.y - shootingHand.y) ** 2
+        (ballCenter.y - shootingHand.y) ** 2
       );
 
       // Return proximity factor (closer = higher value)

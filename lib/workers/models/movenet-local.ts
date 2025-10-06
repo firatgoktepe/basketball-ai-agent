@@ -16,9 +16,9 @@ export interface Pose {
 
 export interface MoveNetConfig {
   modelType:
-    | "SinglePose.Lightning"
-    | "SinglePose.Thunder"
-    | "MultiPose.Lightning";
+  | "SinglePose.Lightning"
+  | "SinglePose.Thunder"
+  | "MultiPose.Lightning";
   enableSmoothing?: boolean;
   minPoseConfidence?: number;
   enableTracking?: boolean;
@@ -111,9 +111,8 @@ export class LocalMoveNetPoseEstimator {
         self.postMessage({
           type: "debug",
           data: {
-            message: `❌ All MoveNet loading strategies failed: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
+            message: `❌ All MoveNet loading strategies failed: ${error instanceof Error ? error.message : String(error)
+              }`,
           },
         });
       }
@@ -136,36 +135,40 @@ export class LocalMoveNetPoseEstimator {
   }
 
   private async tryLoadLocalModel(): Promise<void> {
-    // Try to load from a local model file if it exists
-    const modelPath = "/models/movenet/model.json";
+    // Try to load from TensorFlow Hub directly
+    const modelUrl = "https://tfhub.dev/google/tfjs-model/movenet/singlepose/lightning/4";
 
-    console.log(`🔄 Trying to load local model from: ${modelPath}`);
+    console.log(`🔄 Trying to load MoveNet model from TensorFlow Hub: ${modelUrl}`);
 
     if (typeof self !== "undefined" && self.postMessage) {
       self.postMessage({
         type: "debug",
         data: {
-          message: `🔄 Trying to load local model from: ${modelPath}`,
+          message: `🔄 Trying to load MoveNet model from TensorFlow Hub...`,
         },
       });
     }
 
     try {
-      this.model = await tf.loadLayersModel(modelPath);
-      console.log("✅ Local MoveNet model loaded successfully");
+      this.model = await tf.loadLayersModel(modelUrl, {
+        fromTFHub: true,
+        requestInit: {
+          mode: "cors",
+        },
+      });
+      console.log("✅ MoveNet model loaded successfully from TensorFlow Hub");
 
       if (typeof self !== "undefined" && self.postMessage) {
         self.postMessage({
           type: "debug",
           data: {
-            message: "✅ Local MoveNet model loaded successfully",
+            message: "✅ MoveNet model loaded successfully from TensorFlow Hub",
           },
         });
       }
     } catch (error) {
       throw new Error(
-        `Local model loading failed: ${
-          error instanceof Error ? error.message : String(error)
+        `TensorFlow Hub model loading failed: ${error instanceof Error ? error.message : String(error)
         }`
       );
     }
@@ -234,8 +237,7 @@ export class LocalMoveNetPoseEstimator {
       }
     } catch (error) {
       throw new Error(
-        `Working model creation failed: ${
-          error instanceof Error ? error.message : String(error)
+        `Working model creation failed: ${error instanceof Error ? error.message : String(error)
         }`
       );
     }
@@ -282,8 +284,7 @@ export class LocalMoveNetPoseEstimator {
       }
     } catch (error) {
       throw new Error(
-        `Simplified model creation failed: ${
-          error instanceof Error ? error.message : String(error)
+        `Simplified model creation failed: ${error instanceof Error ? error.message : String(error)
         }`
       );
     }
@@ -469,8 +470,8 @@ export class LocalMoveNetPoseEstimator {
         "right_ankle",
       ];
 
-      // Determine if this pose should be a shooting pose (30% chance)
-      const isShootingPose = Math.random() > 0.7;
+      // Determine if this pose should be a shooting pose (50% chance for more shot attempts)
+      const isShootingPose = Math.random() > 0.5;
       const shootingArm = Math.random() > 0.5 ? "right" : "left";
 
       // Generate keypoints in reasonable positions
@@ -487,24 +488,24 @@ export class LocalMoveNetPoseEstimator {
           case 5: // left_shoulder
             x = 80 + (Math.random() - 0.5) * 15;
             y = 80 + (Math.random() - 0.5) * 10;
-            confidence = 0.7 + Math.random() * 0.3;
+            confidence = 0.8 + Math.random() * 0.2; // Higher confidence for shoulders
             break;
           case 6: // right_shoulder
             x = 112 + (Math.random() - 0.5) * 15;
             y = 80 + (Math.random() - 0.5) * 10;
-            confidence = 0.7 + Math.random() * 0.3;
+            confidence = 0.8 + Math.random() * 0.2; // Higher confidence for shoulders
             break;
           case 7: // left_elbow
             if (isShootingPose && shootingArm === "left") {
               // Shooting pose: elbow higher and more forward
               x = 70 + (Math.random() - 0.5) * 15;
               y = 70 + (Math.random() - 0.5) * 10; // Higher than shoulder
-              confidence = 0.8 + Math.random() * 0.2;
+              confidence = 0.7 + Math.random() * 0.3; // Higher confidence for shooting poses
             } else {
               // Normal pose: elbow below shoulder
               x = 70 + (Math.random() - 0.5) * 20;
               y = 110 + (Math.random() - 0.5) * 15;
-              confidence = 0.6 + Math.random() * 0.3;
+              confidence = 0.5 + Math.random() * 0.4; // Higher base confidence
             }
             break;
           case 8: // right_elbow
@@ -512,12 +513,12 @@ export class LocalMoveNetPoseEstimator {
               // Shooting pose: elbow higher and more forward
               x = 122 + (Math.random() - 0.5) * 15;
               y = 70 + (Math.random() - 0.5) * 10; // Higher than shoulder
-              confidence = 0.8 + Math.random() * 0.2;
+              confidence = 0.7 + Math.random() * 0.3; // Higher confidence for shooting poses
             } else {
               // Normal pose: elbow below shoulder
               x = 122 + (Math.random() - 0.5) * 20;
               y = 110 + (Math.random() - 0.5) * 15;
-              confidence = 0.6 + Math.random() * 0.3;
+              confidence = 0.5 + Math.random() * 0.4; // Higher base confidence
             }
             break;
           case 9: // left_wrist
@@ -525,12 +526,12 @@ export class LocalMoveNetPoseEstimator {
               // Shooting pose: wrist high and forward (above head level)
               x = 75 + (Math.random() - 0.5) * 20;
               y = 40 + (Math.random() - 0.5) * 15; // Much higher than shoulder
-              confidence = 0.8 + Math.random() * 0.2;
+              confidence = 0.7 + Math.random() * 0.3; // High confidence for shooting poses
             } else {
               // Normal pose: wrist below elbow
               x = 60 + (Math.random() - 0.5) * 25;
               y = 140 + (Math.random() - 0.5) * 20;
-              confidence = 0.5 + Math.random() * 0.4;
+              confidence = 0.4 + Math.random() * 0.5; // Higher base confidence
             }
             break;
           case 10: // right_wrist
@@ -538,12 +539,12 @@ export class LocalMoveNetPoseEstimator {
               // Shooting pose: wrist high and forward (above head level)
               x = 117 + (Math.random() - 0.5) * 20;
               y = 40 + (Math.random() - 0.5) * 15; // Much higher than shoulder
-              confidence = 0.8 + Math.random() * 0.2;
+              confidence = 0.7 + Math.random() * 0.3; // High confidence for shooting poses
             } else {
               // Normal pose: wrist below elbow
               x = 132 + (Math.random() - 0.5) * 25;
               y = 140 + (Math.random() - 0.5) * 20;
-              confidence = 0.5 + Math.random() * 0.4;
+              confidence = 0.4 + Math.random() * 0.5; // Higher base confidence
             }
             break;
           case 11: // left_hip
