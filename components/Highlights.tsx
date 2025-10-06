@@ -43,29 +43,44 @@ export function Highlights({
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Create highlight videos from timeline events
-  const highlightVideos: HighlightVideo[] = gameData.events
-    .filter(
-      (event) =>
-        event.type === "score" ||
-        event.type === "shot_attempt" ||
-        event.type === "missed_shot" ||
-        event.type === "offensive_rebound" ||
-        event.type === "defensive_rebound" ||
-        event.type === "turnover" ||
-        event.type === "steal"
-    )
-    .sort((a, b) => a.timestamp - b.timestamp)
-    .map((event) => {
-      // Create a 3-second highlight around each event
-      const startTime = Math.max(0, event.timestamp - 1.5);
-      const endTime = Math.min(videoFile.duration, event.timestamp + 1.5);
+  const highlightVideos: HighlightVideo[] = (() => {
+    const filteredEvents = gameData.events
+      .filter(
+        (event) =>
+          event.type === "score" ||
+          event.type === "shot_attempt" ||
+          event.type === "missed_shot" ||
+          event.type === "offensive_rebound" ||
+          event.type === "defensive_rebound" ||
+          event.type === "turnover" ||
+          event.type === "steal"
+      )
+      .sort((a, b) => a.timestamp - b.timestamp);
+
+    return filteredEvents.map((event, index) => {
+      // Calculate duration based on time to next event or end of video
+      let endTime: number;
+
+      if (index < filteredEvents.length - 1) {
+        // Use time to next event as the end time
+        const nextEvent = filteredEvents[index + 1];
+        endTime = nextEvent.timestamp;
+      } else {
+        // For the last event, use video duration or add a reasonable buffer
+        endTime = Math.min(videoFile.duration, event.timestamp + 10);
+      }
+
+      const startTime = event.timestamp;
+      const duration = endTime - startTime;
+
       return {
         event,
         startTime,
         endTime,
-        duration: endTime - startTime,
+        duration,
       };
     });
+  })();
 
   const totalHighlights = highlightVideos.length;
 
@@ -143,6 +158,11 @@ export function Highlights({
     setSelectedHighlight(highlight);
     setIsPlaying(false);
     setCurrentTime(0);
+
+    // Ensure video is positioned at the start of the highlight
+    if (videoRef.current) {
+      videoRef.current.currentTime = highlight.startTime;
+    }
   }, []);
 
   // Handle play/pause
@@ -151,11 +171,17 @@ export function Highlights({
 
     if (isPlaying) {
       videoRef.current.pause();
+      setIsPlaying(false);
     } else {
-      videoRef.current.currentTime = selectedHighlight.startTime + currentTime;
+      // Ensure we start at the correct time within the highlight bounds
+      const targetTime = selectedHighlight.startTime + currentTime;
+      videoRef.current.currentTime = Math.max(
+        selectedHighlight.startTime,
+        Math.min(targetTime, selectedHighlight.endTime)
+      );
       videoRef.current.play();
+      setIsPlaying(true);
     }
-    setIsPlaying(!isPlaying);
   }, [isPlaying, selectedHighlight, currentTime]);
 
   // Handle mute toggle
@@ -172,11 +198,17 @@ export function Highlights({
     const videoTime = videoRef.current.currentTime;
     const relativeTime = videoTime - selectedHighlight.startTime;
 
-    if (relativeTime >= selectedHighlight.duration) {
-      // Highlight ended, stop playing
+    // Check if we've exceeded the highlight end time
+    if (videoTime >= selectedHighlight.endTime) {
+      // Highlight ended, stop playing and reset
+      videoRef.current.pause();
       setIsPlaying(false);
       setCurrentTime(0);
-    } else {
+      return;
+    }
+
+    // Update current time within the highlight duration
+    if (relativeTime >= 0 && relativeTime <= selectedHighlight.duration) {
       setCurrentTime(relativeTime);
     }
   }, [selectedHighlight]);
@@ -193,6 +225,17 @@ export function Highlights({
     setIsPlaying(false);
     setCurrentTime(0);
   }, []);
+
+  // Ensure video is properly bounded when highlight is selected
+  useEffect(() => {
+    if (selectedHighlight && videoRef.current) {
+      // Set video to start of highlight and pause
+      videoRef.current.currentTime = selectedHighlight.startTime;
+      videoRef.current.pause();
+      setIsPlaying(false);
+      setCurrentTime(0);
+    }
+  }, [selectedHighlight]);
 
   // Handle keyboard shortcuts
   useEffect(() => {
