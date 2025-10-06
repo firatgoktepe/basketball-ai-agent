@@ -13,12 +13,14 @@ import {
   FileSpreadsheet,
   CheckCircle,
   AlertTriangle,
+  Play,
 } from "lucide-react";
 import { GameSummary } from "./GameSummary";
 import { EventTimeline } from "./EventTimeline";
 import { StatisticsCharts } from "./StatisticsCharts";
 import { EventList } from "./EventList";
 import { TeamClusteringVisualization } from "./TeamClusteringVisualization";
+import { Highlights } from "./Highlights";
 import type { GameData, VideoFile, DetectionResult } from "@/types";
 
 interface ResultsDisplayProps {
@@ -35,7 +37,7 @@ export function ResultsDisplay({
   isRealAnalysis = true,
 }: ResultsDisplayProps) {
   const [activeTab, setActiveTab] = useState<
-    "summary" | "timeline" | "charts" | "events"
+    "summary" | "timeline" | "highlights" | "charts" | "events"
   >("summary");
 
   const formatTime = useCallback((time: number) => {
@@ -197,11 +199,12 @@ export function ResultsDisplay({
   }, [gameData, videoFile, formatTime]);
 
   const tabs = [
-    { id: "summary", label: "Summary", icon: BarChart3 },
-    { id: "timeline", label: "Timeline", icon: Clock },
-    { id: "charts", label: "Charts", icon: PieChart },
-    { id: "events", label: "Events", icon: Target },
-  ] as const;
+    { id: "summary" as const, label: "Summary", icon: BarChart3 },
+    { id: "timeline" as const, label: "Timeline", icon: Clock },
+    { id: "highlights" as const, label: "Highlights", icon: Play },
+    { id: "charts" as const, label: "Charts", icon: PieChart },
+    { id: "events" as const, label: "Events", icon: Target },
+  ];
 
   return (
     <div className="space-y-6">
@@ -338,6 +341,10 @@ export function ResultsDisplay({
 
         {activeTab === "timeline" && (
           <EventTimeline gameData={gameData} videoFile={videoFile} />
+        )}
+
+        {activeTab === "highlights" && (
+          <Highlights gameData={gameData} videoFile={videoFile} />
         )}
 
         {activeTab === "charts" && <StatisticsCharts gameData={gameData} />}
