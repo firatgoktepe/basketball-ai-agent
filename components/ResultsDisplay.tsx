@@ -283,7 +283,25 @@ export function ResultsDisplay({
 
       {/* Tabs */}
       <div className="border-b">
-        <nav className="flex space-x-8">
+        <nav
+          className="
+            flex
+            flex-wrap
+            gap-x-8
+            gap-y-2
+            sm:flex-nowrap
+            sm:space-x-8
+            sm:gap-y-0
+            max-w-full
+            md:max-w-3xl
+            mx-auto
+            "
+          style={{
+            // On mobile, allow wrapping and max 3 columns
+            flexDirection: "row",
+            justifyContent: "flex-start",
+          }}
+        >
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (

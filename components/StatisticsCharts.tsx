@@ -49,22 +49,6 @@ export function StatisticsCharts({ gameData }: StatisticsChartsProps) {
     return acc;
   }, {} as Record<string, Record<string, number>>);
 
-  // Shot efficiency data
-  const shotEfficiencyData = gameData.teams.map((team) => {
-    const teamEvents = gameData.events.filter((e) => e.teamId === team.id);
-    const shots = teamEvents.filter((e) => e.type === "shot_attempt").length;
-    const scores = teamEvents.filter((e) => e.type === "score").length;
-    const efficiency = shots > 0 ? (scores / shots) * 100 : 0;
-
-    return {
-      team: team.label,
-      shots,
-      scores,
-      efficiency: Math.round(efficiency * 10) / 10,
-      color: team.color,
-    };
-  });
-
   // Prepare data for charts
   const teamComparisonData = [
     {
@@ -255,33 +239,6 @@ export function StatisticsCharts({ gameData }: StatisticsChartsProps) {
                   fill={teamB.color}
                   name={teamB.label}
                 />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Shot Efficiency Chart */}
-        <div className="bg-card border rounded-lg p-4 lg:p-6">
-          <h3 className="text-lg font-semibold mb-4">Shot Efficiency</h3>
-          <div className="h-64 lg:h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={shotEfficiencyData}
-                layout="horizontal"
-                margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis type="number" domain={[0, 100]} />
-                <YAxis dataKey="team" type="category" />
-                <Tooltip
-                  formatter={(value, name) => [`${value}%`, "Efficiency"]}
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--background))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: "6px",
-                  }}
-                />
-                <Bar dataKey="efficiency" fill="#8884d8" />
               </BarChart>
             </ResponsiveContainer>
           </div>
