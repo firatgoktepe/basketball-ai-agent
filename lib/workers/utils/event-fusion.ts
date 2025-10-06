@@ -179,7 +179,7 @@ async function detectScoreEventsWithAttribution(
         teamADelta,
         timestamp,
         attributedTeam.teamId,
-        recentShotAttempts
+        recentShotAttempts || []
       );
 
       events.push({
@@ -189,9 +189,12 @@ async function detectScoreEventsWithAttribution(
         scoreDelta: teamADelta,
         shotType: shotType.type,
         timestamp,
-        confidence: baseConfidence * attributedTeam.confidence * shotType.confidence,
+        confidence:
+          baseConfidence * attributedTeam.confidence * shotType.confidence,
         source: "ocr",
-        notes: `Detected by scoreboard OCR (+${teamADelta} points, ${shotType.type} shot, attribution confidence: ${(
+        notes: `Detected by scoreboard OCR (+${teamADelta} points, ${
+          shotType.type
+        } shot, attribution confidence: ${(
           attributedTeam.confidence * 100
         ).toFixed(0)}%)`,
       });
@@ -210,7 +213,7 @@ async function detectScoreEventsWithAttribution(
         teamBDelta,
         timestamp,
         attributedTeam.teamId,
-        recentShotAttempts
+        recentShotAttempts || []
       );
 
       events.push({
@@ -220,9 +223,12 @@ async function detectScoreEventsWithAttribution(
         scoreDelta: teamBDelta,
         shotType: shotType.type,
         timestamp,
-        confidence: baseConfidence * attributedTeam.confidence * shotType.confidence,
+        confidence:
+          baseConfidence * attributedTeam.confidence * shotType.confidence,
         source: "ocr",
-        notes: `Detected by scoreboard OCR (+${teamBDelta} points, ${shotType.type} shot, attribution confidence: ${(
+        notes: `Detected by scoreboard OCR (+${teamBDelta} points, ${
+          shotType.type
+        } shot, attribution confidence: ${(
           attributedTeam.confidence * 100
         ).toFixed(0)}%)`,
       });
@@ -249,10 +255,11 @@ function determineShotTypeFromScore(
 
   // Look for shot attempts from the same team within the last 3 seconds
   const timeWindow = 3.0;
-  const relevantShots = recentShotAttempts.filter(shot =>
-    shot.teamId === teamId &&
-    shot.timestamp <= timestamp &&
-    shot.timestamp >= timestamp - timeWindow
+  const relevantShots = recentShotAttempts.filter(
+    (shot) =>
+      shot.teamId === teamId &&
+      shot.timestamp <= timestamp &&
+      shot.timestamp >= timestamp - timeWindow
   );
 
   if (relevantShots.length > 0) {
@@ -637,8 +644,9 @@ function findReboundEvent(
         timestamp: ballFrame.timestamp,
         confidence,
         source: "ball+proximity-heuristic",
-        notes: `Player ${closestPlayer.distance.toFixed(0)}px from ball, ${isOffensive ? "same" : "opposing"
-          } team`,
+        notes: `Player ${closestPlayer.distance.toFixed(0)}px from ball, ${
+          isOffensive ? "same" : "opposing"
+        } team`,
       };
     }
   }
@@ -961,8 +969,9 @@ function applyTemporalSmoothing(events: GameEvent[]): GameEvent[] {
         timestamp: medianTimestamp,
         confidence: avgConfidence,
         source: combinedSource,
-        notes: `Merged ${allSimilar.length} similar detections. ${currentEvent.notes || ""
-          }`,
+        notes: `Merged ${allSimilar.length} similar detections. ${
+          currentEvent.notes || ""
+        }`,
       };
 
       smoothedEvents.push(smoothedEvent);

@@ -16,9 +16,9 @@ export interface Pose {
 
 export interface MoveNetConfig {
   modelType:
-  | "SinglePose.Lightning"
-  | "SinglePose.Thunder"
-  | "MultiPose.Lightning";
+    | "SinglePose.Lightning"
+    | "SinglePose.Thunder"
+    | "MultiPose.Lightning";
   enableSmoothing?: boolean;
   minPoseConfidence?: number;
   enableTracking?: boolean;
@@ -111,8 +111,9 @@ export class LocalMoveNetPoseEstimator {
         self.postMessage({
           type: "debug",
           data: {
-            message: `❌ All MoveNet loading strategies failed: ${error instanceof Error ? error.message : String(error)
-              }`,
+            message: `❌ All MoveNet loading strategies failed: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
           },
         });
       }
@@ -136,9 +137,12 @@ export class LocalMoveNetPoseEstimator {
 
   private async tryLoadLocalModel(): Promise<void> {
     // Try to load from TensorFlow Hub directly
-    const modelUrl = "https://tfhub.dev/google/tfjs-model/movenet/singlepose/lightning/4";
+    const modelUrl =
+      "https://tfhub.dev/google/tfjs-model/movenet/singlepose/lightning/4";
 
-    console.log(`🔄 Trying to load MoveNet model from TensorFlow Hub: ${modelUrl}`);
+    console.log(
+      `🔄 Trying to load MoveNet model from TensorFlow Hub: ${modelUrl}`
+    );
 
     if (typeof self !== "undefined" && self.postMessage) {
       self.postMessage({
@@ -168,7 +172,8 @@ export class LocalMoveNetPoseEstimator {
       }
     } catch (error) {
       throw new Error(
-        `TensorFlow Hub model loading failed: ${error instanceof Error ? error.message : String(error)
+        `TensorFlow Hub model loading failed: ${
+          error instanceof Error ? error.message : String(error)
         }`
       );
     }
@@ -237,7 +242,8 @@ export class LocalMoveNetPoseEstimator {
       }
     } catch (error) {
       throw new Error(
-        `Working model creation failed: ${error instanceof Error ? error.message : String(error)
+        `Working model creation failed: ${
+          error instanceof Error ? error.message : String(error)
         }`
       );
     }
@@ -284,7 +290,8 @@ export class LocalMoveNetPoseEstimator {
       }
     } catch (error) {
       throw new Error(
-        `Simplified model creation failed: ${error instanceof Error ? error.message : String(error)
+        `Simplified model creation failed: ${
+          error instanceof Error ? error.message : String(error)
         }`
       );
     }

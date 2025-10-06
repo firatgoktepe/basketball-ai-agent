@@ -151,7 +151,8 @@ function analyzeImageForPersons(
       const imageArea = width * height;
       const relativeArea = area / imageArea;
 
-      if (relativeArea >= 0.005 && relativeArea <= 0.5) { // More permissive: 0.5% to 50% of image
+      if (relativeArea >= 0.005 && relativeArea <= 0.5) {
+        // More permissive: 0.5% to 50% of image
         // Calculate confidence based on shape quality and size
         const shapeQuality = calculateShapeQuality(component, width, height);
         const sizeQuality = calculateSizeQuality(component, width, height);
@@ -173,7 +174,9 @@ function analyzeImageForPersons(
 
   // If no regions found, add some fallback detections to prevent complete failure
   if (regions.length === 0) {
-    console.log("🔧 No persons detected by computer vision, adding fallback detections");
+    console.log(
+      "🔧 No persons detected by computer vision, adding fallback detections"
+    );
 
     // Add 1-2 fallback person detections in reasonable positions
     const numFallbacks = Math.random() > 0.5 ? 2 : 1;

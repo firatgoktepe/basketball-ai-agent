@@ -149,6 +149,8 @@ async function testAnalyze(videoPath: string, options: any): Promise<GameData> {
     summary: {
       teamA: {
         points: teamAPoints,
+        twoPointScores: Math.floor(teamAPoints * 0.7), // Estimate 70% are 2-pointers
+        threePointScores: Math.floor(teamAPoints * 0.3), // Estimate 30% are 3-pointers
         shotAttempts: teamAShotAttempts,
         offRebounds: Math.floor(teamAShotAttempts * 0.3),
         defRebounds: Math.floor(teamAShotAttempts * 0.4),
@@ -156,6 +158,8 @@ async function testAnalyze(videoPath: string, options: any): Promise<GameData> {
       },
       teamB: {
         points: teamBPoints,
+        twoPointScores: Math.floor(teamBPoints * 0.7), // Estimate 70% are 2-pointers
+        threePointScores: Math.floor(teamBPoints * 0.3), // Estimate 30% are 3-pointers
         shotAttempts: teamBShotAttempts,
         offRebounds: Math.floor(teamBShotAttempts * 0.3),
         defRebounds: Math.floor(teamBShotAttempts * 0.4),

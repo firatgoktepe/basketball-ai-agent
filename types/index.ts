@@ -15,15 +15,15 @@ export interface Team {
 export interface GameEvent {
   id: string;
   type:
-  | "score"
-  | "shot_attempt"
-  | "missed_shot"
-  | "offensive_rebound"
-  | "defensive_rebound"
-  | "turnover"
-  | "steal"
-  | "3pt"
-  | "long_distance_attempt";
+    | "score"
+    | "shot_attempt"
+    | "missed_shot"
+    | "offensive_rebound"
+    | "defensive_rebound"
+    | "turnover"
+    | "steal"
+    | "3pt"
+    | "long_distance_attempt";
   teamId: string;
   scoreDelta?: number;
   shotType?: "2pt" | "3pt"; // Track the type of shot that resulted in a score
@@ -58,13 +58,13 @@ export interface GameData {
 
 export interface AnalysisProgress {
   stage:
-  | "initializing"
-  | "sampling"
-  | "detection"
-  | "ocr"
-  | "fusion"
-  | "results"
-  | "error";
+    | "initializing"
+    | "sampling"
+    | "detection"
+    | "ocr"
+    | "fusion"
+    | "results"
+    | "error";
   progress: number; // 0-100
   message: string;
 }
