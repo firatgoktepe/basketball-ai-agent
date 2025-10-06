@@ -52,6 +52,27 @@ export function GameSummary({ gameData }: GameSummaryProps) {
               <span className="text-2xl font-bold">{summaryA.points}</span>
             </div>
 
+            {/* Score Breakdown */}
+            <div className="bg-muted/30 rounded-lg p-3">
+              <div className="text-xs text-muted-foreground mb-2">
+                Score Breakdown
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">2-Point:</span>
+                  <span className="font-semibold">
+                    {summaryA.twoPointScores}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">3-Point:</span>
+                  <span className="font-semibold text-orange-600">
+                    {summaryA.threePointScores}
+                  </span>
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <div className="text-muted-foreground">Shot Attempts</div>
@@ -87,6 +108,27 @@ export function GameSummary({ gameData }: GameSummaryProps) {
             <div className="flex justify-between items-center">
               <span className="text-sm text-muted-foreground">Points</span>
               <span className="text-2xl font-bold">{summaryB.points}</span>
+            </div>
+
+            {/* Score Breakdown */}
+            <div className="bg-muted/30 rounded-lg p-3">
+              <div className="text-xs text-muted-foreground mb-2">
+                Score Breakdown
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">2-Point:</span>
+                  <span className="font-semibold">
+                    {summaryB.twoPointScores}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">3-Point:</span>
+                  <span className="font-semibold text-orange-600">
+                    {summaryB.threePointScores}
+                  </span>
+                </div>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4 text-sm">

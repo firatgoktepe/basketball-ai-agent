@@ -40,15 +40,7 @@ export async function fuseEvents(options: FusionOptions): Promise<GameEvent[]> {
   } = options;
   const events: GameEvent[] = [];
 
-  // Rule A: Score event detection from OCR with team attribution
-  const scoreEvents = await detectScoreEventsWithAttribution(
-    ocrResults,
-    personDetections,
-    teamClusters
-  );
-  events.push(...scoreEvents);
-
-  // Rule B: Shot attempt detection from pose + ball motion
+  // Rule B: Shot attempt detection from pose + ball motion (run first to get shot attempts for score attribution)
   const shotEvents = await detectShotAttempts(
     shotAttempts,
     poseDetections,
@@ -56,6 +48,15 @@ export async function fuseEvents(options: FusionOptions): Promise<GameEvent[]> {
     teamClusters
   );
   events.push(...shotEvents);
+
+  // Rule A: Score event detection from OCR with team attribution (enhanced with shot type detection)
+  const scoreEvents = await detectScoreEventsWithAttribution(
+    ocrResults,
+    personDetections,
+    teamClusters,
+    shotEvents
+  );
+  events.push(...scoreEvents);
 
   // Detect missed shots (shots not followed by score changes)
   const missedShotEvents = detectMissedShots(shotEvents, scoreEvents);
@@ -133,11 +134,13 @@ export async function fuseEvents(options: FusionOptions): Promise<GameEvent[]> {
  * Rule A: Score event detection from OCR with team attribution
  * High confidence events (0.9-1.0) based on stable OCR readings
  * Team attribution via majority voting of players near hoop
+ * Enhanced to determine shot type (2pt vs 3pt) based on recent shot attempts
  */
 async function detectScoreEventsWithAttribution(
   ocrResults: any[],
   personDetections: any[],
-  teamClusters: any
+  teamClusters: any,
+  recentShotAttempts?: GameEvent[]
 ): Promise<GameEvent[]> {
   const events: GameEvent[] = [];
   let previousScores = { teamA: 0, teamB: 0 };
@@ -171,15 +174,24 @@ async function detectScoreEventsWithAttribution(
         "teamA"
       );
 
+      // Determine shot type based on recent shot attempts
+      const shotType = determineShotTypeFromScore(
+        teamADelta,
+        timestamp,
+        attributedTeam.teamId,
+        recentShotAttempts
+      );
+
       events.push({
         id: `score-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         type: "score",
         teamId: attributedTeam.teamId,
         scoreDelta: teamADelta,
+        shotType: shotType.type,
         timestamp,
-        confidence: baseConfidence * attributedTeam.confidence,
+        confidence: baseConfidence * attributedTeam.confidence * shotType.confidence,
         source: "ocr",
-        notes: `Detected by scoreboard OCR (+${teamADelta} points, attribution confidence: ${(
+        notes: `Detected by scoreboard OCR (+${teamADelta} points, ${shotType.type} shot, attribution confidence: ${(
           attributedTeam.confidence * 100
         ).toFixed(0)}%)`,
       });
@@ -193,15 +205,24 @@ async function detectScoreEventsWithAttribution(
         "teamB"
       );
 
+      // Determine shot type based on recent shot attempts
+      const shotType = determineShotTypeFromScore(
+        teamBDelta,
+        timestamp,
+        attributedTeam.teamId,
+        recentShotAttempts
+      );
+
       events.push({
         id: `score-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         type: "score",
         teamId: attributedTeam.teamId,
         scoreDelta: teamBDelta,
+        shotType: shotType.type,
         timestamp,
-        confidence: baseConfidence * attributedTeam.confidence,
+        confidence: baseConfidence * attributedTeam.confidence * shotType.confidence,
         source: "ocr",
-        notes: `Detected by scoreboard OCR (+${teamBDelta} points, attribution confidence: ${(
+        notes: `Detected by scoreboard OCR (+${teamBDelta} points, ${shotType.type} shot, attribution confidence: ${(
           attributedTeam.confidence * 100
         ).toFixed(0)}%)`,
       });
@@ -211,6 +232,62 @@ async function detectScoreEventsWithAttribution(
   }
 
   return events;
+}
+
+/**
+ * Determines shot type (2pt vs 3pt) based on score delta and recent shot attempts
+ */
+function determineShotTypeFromScore(
+  scoreDelta: number,
+  timestamp: number,
+  teamId: string,
+  recentShotAttempts: GameEvent[]
+): { type: "2pt" | "3pt"; confidence: number } {
+  // Default to 2pt shot if no shot attempts found
+  let shotType: "2pt" | "3pt" = "2pt";
+  let confidence = 0.5;
+
+  // Look for shot attempts from the same team within the last 3 seconds
+  const timeWindow = 3.0;
+  const relevantShots = recentShotAttempts.filter(shot =>
+    shot.teamId === teamId &&
+    shot.timestamp <= timestamp &&
+    shot.timestamp >= timestamp - timeWindow
+  );
+
+  if (relevantShots.length > 0) {
+    // Find the most recent shot attempt
+    const mostRecentShot = relevantShots.reduce((latest, shot) =>
+      shot.timestamp > latest.timestamp ? shot : latest
+    );
+
+    // Check if it was a 3pt attempt
+    if (mostRecentShot.type === "3pt") {
+      shotType = "3pt";
+      confidence = 0.9; // High confidence if we have a 3pt attempt
+    } else if (mostRecentShot.type === "long_distance_attempt") {
+      shotType = "3pt";
+      confidence = 0.7; // Medium confidence for long distance attempt
+    } else {
+      shotType = "2pt";
+      confidence = 0.8; // High confidence for regular shot attempt
+    }
+  } else {
+    // No shot attempts found, use score delta to infer
+    if (scoreDelta === 3) {
+      shotType = "3pt";
+      confidence = 0.6; // Medium confidence based on score alone
+    } else if (scoreDelta === 2) {
+      shotType = "2pt";
+      confidence = 0.7; // Higher confidence for 2pt (more common)
+    } else if (scoreDelta === 1) {
+      // Could be a free throw, treat as 2pt
+      shotType = "2pt";
+      confidence = 0.5; // Lower confidence for free throws
+    }
+  }
+
+  return { type: shotType, confidence };
 }
 
 /**
@@ -560,9 +637,8 @@ function findReboundEvent(
         timestamp: ballFrame.timestamp,
         confidence,
         source: "ball+proximity-heuristic",
-        notes: `Player ${closestPlayer.distance.toFixed(0)}px from ball, ${
-          isOffensive ? "same" : "opposing"
-        } team`,
+        notes: `Player ${closestPlayer.distance.toFixed(0)}px from ball, ${isOffensive ? "same" : "opposing"
+          } team`,
       };
     }
   }
@@ -885,9 +961,8 @@ function applyTemporalSmoothing(events: GameEvent[]): GameEvent[] {
         timestamp: medianTimestamp,
         confidence: avgConfidence,
         source: combinedSource,
-        notes: `Merged ${allSimilar.length} similar detections. ${
-          currentEvent.notes || ""
-        }`,
+        notes: `Merged ${allSimilar.length} similar detections. ${currentEvent.notes || ""
+          }`,
       };
 
       smoothedEvents.push(smoothedEvent);

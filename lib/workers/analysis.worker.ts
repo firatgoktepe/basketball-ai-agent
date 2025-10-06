@@ -40,13 +40,13 @@ async function initializeModels(forceMockPoseModel = false) {
     // Load core models
     const moveNetConfig = forceMockPoseModel
       ? {
-          modelType: "SinglePose.Lightning" as const,
-          forceMock: true,
-        }
+        modelType: "SinglePose.Lightning" as const,
+        forceMock: true,
+      }
       : {
-          modelType: "SinglePose.Lightning" as const,
-          forceMock: false,
-        };
+        modelType: "SinglePose.Lightning" as const,
+        forceMock: false,
+      };
 
     const [coco, moveNet] = await Promise.all([
       loadCocoSSD(),
@@ -501,7 +501,9 @@ function generateFallbackEvents(videoFile: any, teamClusters: any): any[] {
 
     if (eventType === "score") {
       // Mix of 2-point and 3-point shots
-      event.scoreDelta = Math.random() > 0.8 ? 3 : 2;
+      const is3Point = Math.random() > 0.8;
+      event.scoreDelta = is3Point ? 3 : 2;
+      event.shotType = is3Point ? "3pt" : "2pt";
     }
 
     events.push(event);
@@ -550,6 +552,12 @@ function generateGameData(videoFile: any, teamClusters: any, events: any[]) {
       points: events
         .filter((e) => e.type === "score" && e.teamId === "teamA")
         .reduce((sum, e) => sum + (e.scoreDelta || 0), 0),
+      twoPointScores: events
+        .filter((e) => e.type === "score" && e.teamId === "teamA" && e.shotType === "2pt")
+        .reduce((sum, e) => sum + (e.scoreDelta || 0), 0),
+      threePointScores: events
+        .filter((e) => e.type === "score" && e.teamId === "teamA" && e.shotType === "3pt")
+        .reduce((sum, e) => sum + (e.scoreDelta || 0), 0),
       shotAttempts: events.filter(
         (e) => e.type === "shot_attempt" && e.teamId === "teamA"
       ).length,
@@ -566,6 +574,12 @@ function generateGameData(videoFile: any, teamClusters: any, events: any[]) {
     teamB: {
       points: events
         .filter((e) => e.type === "score" && e.teamId === "teamB")
+        .reduce((sum, e) => sum + (e.scoreDelta || 0), 0),
+      twoPointScores: events
+        .filter((e) => e.type === "score" && e.teamId === "teamB" && e.shotType === "2pt")
+        .reduce((sum, e) => sum + (e.scoreDelta || 0), 0),
+      threePointScores: events
+        .filter((e) => e.type === "score" && e.teamId === "teamB" && e.shotType === "3pt")
         .reduce((sum, e) => sum + (e.scoreDelta || 0), 0),
       shotAttempts: events.filter(
         (e) => e.type === "shot_attempt" && e.teamId === "teamB"

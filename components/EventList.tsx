@@ -31,7 +31,7 @@ export function EventList({
 }: EventListProps) {
   const [editingEvent, setEditingEvent] = useState<string | null>(null);
   const [filter, setFilter] = useState<
-    "all" | "high_confidence" | "low_confidence"
+    "all" | "high_confidence" | "low_confidence" | "2pt_scores" | "3pt_scores"
   >("all");
   const [sortBy, setSortBy] = useState<"timestamp" | "confidence" | "type">(
     "timestamp"
@@ -83,6 +83,10 @@ export function EventList({
   const filteredEvents = gameData.events.filter((event) => {
     if (filter === "high_confidence") return event.confidence >= 0.5;
     if (filter === "low_confidence") return event.confidence < 0.5;
+    if (filter === "2pt_scores")
+      return event.type === "score" && event.shotType === "2pt";
+    if (filter === "3pt_scores")
+      return event.type === "score" && event.shotType === "3pt";
     return true;
   });
 
@@ -187,6 +191,22 @@ export function EventList({
           >
             Low Confidence
           </button>
+          <button
+            onClick={() => setFilter("2pt_scores")}
+            className={`px-3 py-1 rounded text-sm ${
+              filter === "2pt_scores" ? "bg-green-600 text-white" : "bg-muted"
+            }`}
+          >
+            2-Point Scores
+          </button>
+          <button
+            onClick={() => setFilter("3pt_scores")}
+            className={`px-3 py-1 rounded text-sm ${
+              filter === "3pt_scores" ? "bg-orange-600 text-white" : "bg-muted"
+            }`}
+          >
+            3-Point Scores
+          </button>
         </div>
 
         <div className="flex items-center gap-2">
@@ -224,6 +244,17 @@ export function EventList({
                     <div className="font-medium capitalize">
                       {event.type.replace("_", " ")}
                       {event.scoreDelta && ` (+${event.scoreDelta})`}
+                      {event.shotType && (
+                        <span
+                          className={`ml-2 text-xs px-2 py-1 rounded-full font-semibold ${
+                            event.shotType === "3pt"
+                              ? "bg-orange-200 text-orange-800 border border-orange-300"
+                              : "bg-green-200 text-green-800 border border-green-300"
+                          }`}
+                        >
+                          {event.shotType}
+                        </span>
+                      )}
                     </div>
                     <div className="text-sm text-muted-foreground">
                       {team?.label} • {formatTime(event.timestamp)}

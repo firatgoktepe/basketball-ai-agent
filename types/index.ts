@@ -26,6 +26,7 @@ export interface GameEvent {
   | "long_distance_attempt";
   teamId: string;
   scoreDelta?: number;
+  shotType?: "2pt" | "3pt"; // Track the type of shot that resulted in a score
   timestamp: number;
   confidence: number;
   source: string;
@@ -34,6 +35,8 @@ export interface GameEvent {
 
 export interface TeamSummary {
   points: number;
+  twoPointScores: number;
+  threePointScores: number;
   shotAttempts: number;
   offRebounds: number;
   defRebounds: number;

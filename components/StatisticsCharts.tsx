@@ -73,6 +73,16 @@ export function StatisticsCharts({ gameData }: StatisticsChartsProps) {
       [teamB.label]: summaryB.points,
     },
     {
+      category: "2-Point Scores",
+      [teamA.label]: summaryA.twoPointScores,
+      [teamB.label]: summaryB.twoPointScores,
+    },
+    {
+      category: "3-Point Scores",
+      [teamA.label]: summaryA.threePointScores,
+      [teamB.label]: summaryB.threePointScores,
+    },
+    {
       category: "Shot Attempts",
       [teamA.label]: summaryA.shotAttempts,
       [teamB.label]: summaryB.shotAttempts,
@@ -101,9 +111,18 @@ export function StatisticsCharts({ gameData }: StatisticsChartsProps) {
       color: "#3b82f6",
     },
     {
-      name: "Scores",
-      value: gameData.events.filter((e) => e.type === "score").length,
+      name: "2-Point Scores",
+      value: gameData.events.filter(
+        (e) => e.type === "score" && e.shotType === "2pt"
+      ).length,
       color: "#10b981",
+    },
+    {
+      name: "3-Point Scores",
+      value: gameData.events.filter(
+        (e) => e.type === "score" && e.shotType === "3pt"
+      ).length,
+      color: "#ff9500",
     },
     {
       name: "Rebounds",
@@ -134,6 +153,8 @@ export function StatisticsCharts({ gameData }: StatisticsChartsProps) {
         timestamp: event.timestamp,
         [teamA.label]: lastEntry ? lastEntry[teamA.label] : 0,
         [teamB.label]: lastEntry ? lastEntry[teamB.label] : 0,
+        shotType: event.shotType || "unknown",
+        teamId: event.teamId,
       };
       newEntry[team.label] += event.scoreDelta || 0;
       acc.push(newEntry);
@@ -169,6 +190,52 @@ export function StatisticsCharts({ gameData }: StatisticsChartsProps) {
                   height={60}
                   fontSize={12}
                 />
+                <YAxis />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "hsl(var(--background))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "6px",
+                  }}
+                />
+                <Legend />
+                <Bar
+                  dataKey={teamA.label}
+                  fill={teamA.color}
+                  name={teamA.label}
+                />
+                <Bar
+                  dataKey={teamB.label}
+                  fill={teamB.color}
+                  name={teamB.label}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Score Breakdown Chart */}
+        <div className="bg-card border rounded-lg p-4 lg:p-6">
+          <h3 className="text-lg font-semibold mb-4">Score Breakdown</h3>
+          <div className="h-64 lg:h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={[
+                  {
+                    category: "2-Point Scores",
+                    [teamA.label]: summaryA.twoPointScores,
+                    [teamB.label]: summaryB.twoPointScores,
+                  },
+                  {
+                    category: "3-Point Scores",
+                    [teamA.label]: summaryA.threePointScores,
+                    [teamB.label]: summaryB.threePointScores,
+                  },
+                ]}
+                margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="category" />
                 <YAxis />
                 <Tooltip
                   contentStyle={{
@@ -276,6 +343,19 @@ export function StatisticsCharts({ gameData }: StatisticsChartsProps) {
                   <YAxis />
                   <Tooltip
                     labelFormatter={(value) => `Time: ${formatTime(value)}`}
+                    formatter={(value, name, props) => {
+                      const shotType = props.payload?.shotType;
+                      const teamId = props.payload?.teamId;
+                      const team = gameData.teams.find((t) => t.id === teamId);
+                      const shotTypeText =
+                        shotType && shotType !== "unknown"
+                          ? ` (${shotType})`
+                          : "";
+                      return [
+                        `${value} points${shotTypeText}`,
+                        team?.label || name,
+                      ];
+                    }}
                     contentStyle={{
                       backgroundColor: "hsl(var(--background))",
                       border: "1px solid hsl(var(--border))",

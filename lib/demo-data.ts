@@ -12,10 +12,11 @@ export function generateDemoGameData(): GameData {
       type: "score" as const,
       teamId: "teamA",
       scoreDelta: 2,
+      shotType: "2pt" as const,
       timestamp: 12.4,
       confidence: 0.98,
       source: "ocr",
-      notes: "Detected by scoreboard OCR",
+      notes: "Detected by scoreboard OCR - 2-point score",
     },
     {
       id: "evt-002",
@@ -49,6 +50,7 @@ export function generateDemoGameData(): GameData {
       type: "score" as const,
       teamId: "teamA",
       scoreDelta: 3,
+      shotType: "3pt" as const,
       timestamp: 45.2,
       confidence: 0.95,
       source: "ocr",
@@ -86,10 +88,11 @@ export function generateDemoGameData(): GameData {
       type: "score" as const,
       teamId: "teamA",
       scoreDelta: 2,
+      shotType: "2pt" as const,
       timestamp: 91.5,
       confidence: 0.96,
       source: "ocr",
-      notes: "Score detected by scoreboard OCR",
+      notes: "Score detected by scoreboard OCR - 2-point score",
     },
     {
       id: "evt-010",
@@ -100,18 +103,44 @@ export function generateDemoGameData(): GameData {
       source: "court-geometry-heuristic",
       notes: "Estimated 3-point attempt based on court position",
     },
+    {
+      id: "evt-011",
+      type: "score" as const,
+      teamId: "teamB",
+      scoreDelta: 3,
+      shotType: "3pt" as const,
+      timestamp: 115.3,
+      confidence: 0.92,
+      source: "ocr",
+      notes: "3-point score by Red team",
+    },
+    {
+      id: "evt-012",
+      type: "score" as const,
+      teamId: "teamB",
+      scoreDelta: 2,
+      shotType: "2pt" as const,
+      timestamp: 128.7,
+      confidence: 0.89,
+      source: "ocr",
+      notes: "2-point score by Red team",
+    },
   ];
 
   const summary = {
     teamA: {
-      points: 7,
+      points: 7, // 2 + 3 + 2 = 7
+      twoPointScores: 4, // 2 + 2 = 4
+      threePointScores: 3, // 3 = 3
       shotAttempts: 3,
       offRebounds: 1,
       defRebounds: 1,
       turnovers: 0,
     },
     teamB: {
-      points: 0,
+      points: 5, // 3 + 2 = 5
+      twoPointScores: 2, // 2 = 2
+      threePointScores: 3, // 3 = 3
       shotAttempts: 2,
       offRebounds: 0,
       defRebounds: 0,

@@ -37,10 +37,13 @@ export function EventTimeline({
     return `${minutes}:${seconds.toString().padStart(2, "0")}`;
   };
 
-  const getEventIcon = (eventType: string) => {
+  const getEventIcon = (eventType: string, shotType?: string) => {
     switch (eventType) {
       case "score":
-        return <Trophy className="w-4 h-4 text-green-600" />;
+        if (shotType === "3pt") {
+          return <Trophy className="w-4 h-4 text-orange-600" />; // Orange for 3-pointers
+        }
+        return <Trophy className="w-4 h-4 text-green-600" />; // Green for 2-pointers
       case "shot_attempt":
       case "missed_shot":
         return <Target className="w-4 h-4 text-blue-600" />;
@@ -251,6 +254,16 @@ export function EventTimeline({
               const team = gameData.teams.find((t) => t.id === event.teamId);
               const isSelected = selectedEvent === event.id;
 
+              // Create enhanced tooltip with shot type info
+              let tooltipText = `${event.type.replace("_", " ")} - ${
+                team?.label
+              } at ${formatTime(event.timestamp)}`;
+              if (event.type === "score") {
+                tooltipText += ` (+${event.scoreDelta}${
+                  event.shotType ? ` - ${event.shotType}` : ""
+                })`;
+              }
+
               return (
                 <button
                   key={event.id}
@@ -259,18 +272,26 @@ export function EventTimeline({
                     isSelected ? "z-10" : ""
                   }`}
                   style={{ left: `${position}%` }}
-                  title={`${event.type} - ${team?.label} at ${formatTime(
-                    event.timestamp
-                  )}`}
+                  title={tooltipText}
                 >
                   <div className={`relative ${isSelected ? "scale-125" : ""}`}>
-                    {getEventIcon(event.type)}
+                    {getEventIcon(event.type, event.shotType)}
                     <div
                       className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-white ${
                         isSelected ? "ring-2 ring-yellow-400" : ""
                       }`}
                       style={{ backgroundColor: team?.color }}
                     />
+                    {/* Shot type indicator for score events */}
+                    {event.type === "score" && event.shotType && (
+                      <div
+                        className={`absolute -bottom-1 -right-1 w-2 h-2 rounded-full text-xs font-bold ${
+                          event.shotType === "3pt"
+                            ? "bg-orange-500"
+                            : "bg-green-500"
+                        }`}
+                      />
+                    )}
                   </div>
                 </button>
               );
@@ -312,11 +333,16 @@ export function EventTimeline({
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    {getEventIcon(event.type)}
+                    {getEventIcon(event.type, event.shotType)}
                     <div>
                       <div className="font-medium capitalize">
                         {event.type.replace("_", " ")}
                         {event.scoreDelta && ` (+${event.scoreDelta})`}
+                        {event.shotType && (
+                          <span className="ml-2 text-xs px-2 py-1 rounded-full bg-orange-100 text-orange-700">
+                            {event.shotType}
+                          </span>
+                        )}
                       </div>
                       <div className="text-sm opacity-75">
                         {team?.label} • {formatTime(event.timestamp)}
