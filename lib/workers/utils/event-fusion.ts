@@ -100,8 +100,8 @@ export async function fuseEvents(options: FusionOptions): Promise<GameEvent[]> {
     );
   });
 
-  // Use moderate confidence threshold to capture real events
-  const filteredEvents = filterLowConfidenceEvents(smoothedEvents, 0.3);
+  // Use much lower confidence threshold to capture more events
+  const filteredEvents = filterLowConfidenceEvents(smoothedEvents, 0.1);
 
   console.log(
     `📊 Filtered ${smoothedEvents.length} events down to ${filteredEvents.length} events`
@@ -371,8 +371,14 @@ async function detectShotAttempts(
 ): Promise<GameEvent[]> {
   const events: GameEvent[] = [];
 
+  // If no shot attempts from pose analysis, try to generate some from ball motion
+  if (shotAttempts.length === 0 && ballDetections.length > 0) {
+    shotAttempts = generateBasicShotAttemptsFromBallMotion(ballDetections);
+  }
+
   for (const attempt of shotAttempts) {
-    const { timestamp, playerId, bbox, confidence: poseConfidence } = attempt;
+    const { timestamp, playerId, confidence: poseConfidence } = attempt;
+    const bbox = attempt.bbox || [0, 0, 100, 100]; // Default bbox if not provided
 
     // Check if ball is moving towards hoop
     const ballMotionConfidence = analyzeBallMotion(
@@ -389,10 +395,14 @@ async function detectShotAttempts(
       teamClusters
     );
 
-    // Combine confidence scores: pose evidence + ball motion
+    // More permissive confidence calculation
     const combinedConfidence = computeConfidence([
-      { signal: "pose", value: poseConfidence, weight: 0.6 },
-      { signal: "ball-motion", value: ballMotionConfidence, weight: 0.4 },
+      { signal: "pose", value: Math.max(0.1, poseConfidence), weight: 0.4 },
+      {
+        signal: "ball-motion",
+        value: Math.max(0.1, ballMotionConfidence),
+        weight: 0.6,
+      },
     ]);
 
     events.push({
@@ -400,7 +410,7 @@ async function detectShotAttempts(
       type: "shot_attempt",
       teamId: teamId || "teamA",
       timestamp,
-      confidence: combinedConfidence,
+      confidence: Math.max(0.2, combinedConfidence), // Ensure minimum confidence
       source:
         ballMotionConfidence > 0 ? "pose+ball-heuristic" : "pose-analysis",
       notes: `Pose confidence: ${(poseConfidence * 100).toFixed(
@@ -410,6 +420,51 @@ async function detectShotAttempts(
   }
 
   return events;
+}
+
+/**
+ * Generates basic shot attempts from ball motion when pose data is insufficient
+ */
+function generateBasicShotAttemptsFromBallMotion(ballDetections: any[]): any[] {
+  const shotAttempts: any[] = [];
+
+  // Look for ball motion patterns that suggest shot attempts
+  for (let i = 1; i < ballDetections.length; i++) {
+    const currentFrame = ballDetections[i];
+    const previousFrame = ballDetections[i - 1];
+
+    if (
+      !currentFrame.detections ||
+      !previousFrame.detections ||
+      currentFrame.detections.length === 0 ||
+      previousFrame.detections.length === 0
+    ) {
+      continue;
+    }
+
+    const currentBall = currentFrame.detections[0];
+    const previousBall = previousFrame.detections[0];
+
+    // Check for upward ball motion (potential shot)
+    const ballCenterY = currentBall.bbox[1] + currentBall.bbox[3] / 2;
+    const prevBallCenterY = previousBall.bbox[1] + previousBall.bbox[3] / 2;
+    const upwardMotion = prevBallCenterY - ballCenterY; // Positive means ball moving up
+
+    // Check for significant upward motion
+    if (upwardMotion > 15) {
+      // Ball moved up by at least 15 pixels
+      const timestamp = currentFrame.timestamp || i * (1 / 30);
+
+      shotAttempts.push({
+        timestamp,
+        playerId: `ball_motion_player_${i}`,
+        confidence: Math.min(0.5, upwardMotion / 40), // Scale confidence based on motion
+        bbox: currentBall.bbox,
+      });
+    }
+  }
+
+  return shotAttempts;
 }
 
 /**

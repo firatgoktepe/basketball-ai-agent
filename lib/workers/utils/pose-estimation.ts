@@ -111,6 +111,11 @@ export function detectShotAttempts(
     });
   }
 
+  // Fallback: If no poses detected, try to generate some basic shot attempts from ball motion
+  if (poseResults.length === 0 && ballDetections && ballDetections.length > 0) {
+    return generateFallbackShotAttempts(ballDetections);
+  }
+
   for (let i = 0; i < poseResults.length; i++) {
     const currentFrame = poseResults[i];
 
@@ -242,19 +247,19 @@ function analyzePoseForShot(
     });
   }
 
-  // Lower confidence threshold to be more permissive
+  // Much lower confidence threshold to capture more keypoints
   const visibleKeypoints = requiredKeypoints.filter(
-    (kp) => kp.confidence > 0.1 // Lowered from 0.3 to 0.1
+    (kp) => kp.confidence > 0.05 // Lowered from 0.1 to 0.05
   );
 
-  if (visibleKeypoints.length < 2) {
-    // Lowered from 4 to 2
+  if (visibleKeypoints.length < 1) {
+    // Lowered from 2 to 1 - be more permissive
     // Debug: Log insufficient keypoints
     if (typeof self !== "undefined" && self.postMessage) {
       self.postMessage({
         type: "debug",
         data: {
-          message: `⚠️ Insufficient keypoints for pose analysis: ${visibleKeypoints.length}/6 visible (threshold: 0.1)`,
+          message: `⚠️ Insufficient keypoints for pose analysis: ${visibleKeypoints.length}/6 visible (threshold: 0.05)`,
         },
       });
     }
@@ -304,9 +309,9 @@ function analyzePoseForShot(
     });
   }
 
-  // Lower the thresholds to be more permissive
-  if (confidence > 0.3 && armElevation > 0.2) {
-    // Lowered from 0.5/0.3 to 0.3/0.2
+  // Much lower thresholds to be more permissive
+  if (confidence > 0.1 && armElevation > 0.1) {
+    // Lowered from 0.3/0.2 to 0.1/0.1
     if (typeof self !== "undefined" && self.postMessage) {
       self.postMessage({
         type: "debug",
@@ -343,10 +348,12 @@ function calculateArmElevation(
   elbow: { x: number; y: number; confidence: number },
   wrist: { x: number; y: number; confidence: number }
 ): number {
+  // Use much lower threshold and handle negative confidence values
+  const minConfidence = 0.05; // Lowered from 0.3 to 0.05
   if (
-    shoulder.confidence < 0.3 ||
-    elbow.confidence < 0.3 ||
-    wrist.confidence < 0.3
+    shoulder.confidence < minConfidence ||
+    elbow.confidence < minConfidence ||
+    wrist.confidence < minConfidence
   ) {
     return 0;
   }
@@ -420,14 +427,16 @@ function calculateShootingConfidence(
   const maxElevation = Math.max(leftArmElevation, rightArmElevation);
   confidence += maxElevation * 0.6;
 
-  // Keypoint confidence factor
-  const avgConfidence =
-    (leftWrist.confidence +
-      rightWrist.confidence +
-      leftElbow.confidence +
-      rightElbow.confidence) /
-    4;
-  confidence += avgConfidence * 0.4;
+  // Handle negative confidence values by using absolute values and scaling
+  const avgConfidence = Math.max(
+    0,
+    (Math.abs(leftWrist.confidence) +
+      Math.abs(rightWrist.confidence) +
+      Math.abs(leftElbow.confidence) +
+      Math.abs(rightElbow.confidence)) /
+      4
+  );
+  confidence += Math.min(avgConfidence, 0.5) * 0.4; // Cap keypoint contribution
 
   // Asymmetry bonus (one arm more elevated than the other)
   const asymmetry = Math.abs(leftArmElevation - rightArmElevation);
@@ -473,4 +482,76 @@ function checkBallProximity(
   }
 
   return 0;
+}
+
+/**
+ * Fallback shot detection based on ball motion when pose data is insufficient
+ */
+function generateFallbackShotAttempts(ballDetections: any[]): ShotAttempt[] {
+  const shotAttempts: ShotAttempt[] = [];
+
+  if (typeof self !== "undefined" && self.postMessage) {
+    self.postMessage({
+      type: "debug",
+      data: {
+        message: `🔧 Using fallback shot detection based on ball motion`,
+      },
+    });
+  }
+
+  // Look for ball motion patterns that suggest shot attempts
+  for (let i = 1; i < ballDetections.length; i++) {
+    const currentFrame = ballDetections[i];
+    const previousFrame = ballDetections[i - 1];
+
+    if (
+      !currentFrame.detections ||
+      !previousFrame.detections ||
+      currentFrame.detections.length === 0 ||
+      previousFrame.detections.length === 0
+    ) {
+      continue;
+    }
+
+    const currentBall = currentFrame.detections[0];
+    const previousBall = previousFrame.detections[0];
+
+    // Check for upward ball motion (potential shot)
+    const ballCenterY = currentBall.bbox[1] + currentBall.bbox[3] / 2;
+    const prevBallCenterY = previousBall.bbox[1] + previousBall.bbox[3] / 2;
+    const upwardMotion = prevBallCenterY - ballCenterY; // Positive means ball moving up
+
+    // Check for significant upward motion
+    if (upwardMotion > 20) {
+      // Ball moved up by at least 20 pixels
+      const timestamp = currentFrame.timestamp || i * (1 / 30);
+
+      shotAttempts.push({
+        playerId: `fallback_player_${i}`,
+        timestamp,
+        confidence: Math.min(0.6, upwardMotion / 50), // Scale confidence based on motion
+        keypoints: {
+          leftWrist: { x: 0, y: 0, confidence: 0.1 },
+          rightWrist: { x: 0, y: 0, confidence: 0.1 },
+          leftElbow: { x: 0, y: 0, confidence: 0.1 },
+          rightElbow: { x: 0, y: 0, confidence: 0.1 },
+          leftShoulder: { x: 0, y: 0, confidence: 0.1 },
+          rightShoulder: { x: 0, y: 0, confidence: 0.1 },
+        },
+        armElevation: 0.5, // Default moderate elevation
+        shootingForm: "unknown",
+      });
+    }
+  }
+
+  if (typeof self !== "undefined" && self.postMessage) {
+    self.postMessage({
+      type: "debug",
+      data: {
+        message: `🔧 Fallback shot detection found ${shotAttempts.length} potential shots`,
+      },
+    });
+  }
+
+  return shotAttempts;
 }
