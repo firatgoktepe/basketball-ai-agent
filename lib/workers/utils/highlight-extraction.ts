@@ -28,13 +28,13 @@ export interface HighlightFilter {
 /**
  * Extract highlight clips from game events
  * @param events - All game events
- * @param beforeBuffer - Seconds to include before event (default: 3s)
- * @param afterBuffer - Seconds to include after event (default: 2s)
+ * @param beforeBuffer - Seconds to include before event (default: 2s)
+ * @param afterBuffer - Seconds to include after event (default: 3s)
  */
 export function extractHighlights(
   events: GameEvent[],
-  beforeBuffer: number = 3.0,
-  afterBuffer: number = 2.0
+  beforeBuffer: number = 2.0,
+  afterBuffer: number = 3.0
 ): HighlightClip[] {
   const highlights: HighlightClip[] = [];
 
@@ -61,6 +61,33 @@ export function extractHighlights(
 
     const startTime = Math.max(0, event.timestamp - beforeBuffer);
     const endTime = event.timestamp + afterBuffer;
+    const duration = endTime - startTime;
+
+    // Debug log for investigation
+    if (duration <= 0 || duration < 5.0) {
+      console.warn(
+        `⚠️ Invalid highlight detected:`,
+        `\n  Event: ${event.id} (${event.type})`,
+        `\n  Timestamp: ${event.timestamp}s`,
+        `\n  StartTime: ${startTime}s`,
+        `\n  EndTime: ${endTime}s`,
+        `\n  Duration: ${duration}s`,
+        `\n  BeforeBuffer: ${beforeBuffer}s`,
+        `\n  AfterBuffer: ${afterBuffer}s`
+      );
+    }
+
+    // Skip highlights with zero or negative duration
+    if (duration <= 0) {
+      console.warn(`❌ Skipping highlight with invalid duration: ${duration}s for event ${event.id}`);
+      continue;
+    }
+
+    // Skip highlights that are too short (minimum 5 seconds)
+    if (duration < 5.0) {
+      console.warn(`❌ Skipping highlight with too short duration: ${duration.toFixed(2)}s (minimum: 5.0s) for event ${event.id}`);
+      continue;
+    }
 
     highlights.push({
       id: `highlight-${event.id}`,
@@ -70,11 +97,12 @@ export function extractHighlights(
       playerId: event.playerId,
       startTime,
       endTime,
-      duration: endTime - startTime,
+      duration,
       description: generateHighlightDescription(event),
     });
   }
 
+  console.log(`✅ Extracted ${highlights.length} valid highlights from ${events.length} events`);
   return highlights;
 }
 

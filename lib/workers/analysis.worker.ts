@@ -754,7 +754,8 @@ function generateGameData(videoFile: any, teamClusters: any, events: any[]) {
   };
 
   // Extract highlight clips from significant events
-  const highlights = extractHighlights(events, 3.0, 2.0);
+  // Default: 2s before + 3s after = 5s total minimum duration
+  const highlights = extractHighlights(events);
 
   return {
     video: {

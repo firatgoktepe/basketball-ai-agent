@@ -46,25 +46,67 @@ export function Highlights({
   const highlightVideos: HighlightVideo[] = (() => {
     // If highlights are pre-extracted, use them
     if (gameData.highlights && gameData.highlights.length > 0) {
-      return gameData.highlights.map((highlight) => {
-        const event = gameData.events.find((e) => e.id === highlight.eventId);
-        return {
-          event: event || {
-            id: highlight.eventId,
-            type: highlight.eventType as any,
-            teamId: highlight.teamId,
-            timestamp: highlight.startTime,
-            confidence: 1,
-            source: "highlight",
-          },
-          startTime: highlight.startTime,
-          endTime: highlight.endTime,
-          duration: highlight.duration,
-        };
-      });
+      console.log(
+        `📹 Processing ${gameData.highlights.length} pre-extracted highlights`
+      );
+
+      const processed = gameData.highlights
+        .map((highlight, index) => {
+          const event = gameData.events.find((e) => e.id === highlight.eventId);
+
+          // Validate and correct duration if needed
+          let duration = highlight.duration;
+          let endTime = highlight.endTime;
+
+          if (duration <= 0 || !isFinite(duration)) {
+            // Invalid duration, set minimum duration
+            console.warn(
+              `🔧 Correcting invalid highlight #${index}:`,
+              `\n  ID: ${highlight.id}`,
+              `\n  Original duration: ${highlight.duration}s`,
+              `\n  Start: ${highlight.startTime}s`,
+              `\n  End: ${highlight.endTime}s`,
+              `\n  Setting to 5.0s`
+            );
+            duration = 5.0;
+            endTime = highlight.startTime + duration;
+          }
+
+          return {
+            event: event || {
+              id: highlight.eventId,
+              type: highlight.eventType as any,
+              teamId: highlight.teamId,
+              timestamp: highlight.startTime,
+              confidence: 1,
+              source: "highlight",
+            },
+            startTime: highlight.startTime,
+            endTime: endTime,
+            duration: duration,
+          };
+        })
+        .filter((highlight) => {
+          const isValid = highlight.duration >= 5.0;
+          if (!isValid) {
+            console.warn(
+              `❌ Filtering out highlight with duration ${highlight.duration.toFixed(
+                2
+              )}s (minimum: 5.0s)`
+            );
+          }
+          return isValid;
+        });
+
+      console.log(
+        `✅ ${processed.length} valid highlights after processing (min 5s duration)`
+      );
+      return processed;
     }
 
     // Otherwise, create from significant events
+    console.log(`📝 Creating highlights from ${gameData.events.length} events`);
+
     const filteredEvents = gameData.events
       .filter(
         (event) =>
@@ -82,29 +124,66 @@ export function Highlights({
       )
       .sort((a, b) => a.timestamp - b.timestamp);
 
-    return filteredEvents.map((event, index) => {
-      // Calculate duration based on time to next event or end of video
-      let endTime: number;
+    console.log(`🎯 ${filteredEvents.length} events selected for highlights`);
 
-      if (index < filteredEvents.length - 1) {
-        // Use time to next event as the end time
-        const nextEvent = filteredEvents[index + 1];
-        endTime = nextEvent.timestamp;
-      } else {
-        // For the last event, use video duration or add a reasonable buffer
-        endTime = Math.min(videoFile.duration, event.timestamp + 10);
-      }
+    const created = filteredEvents
+      .map((event, index) => {
+        // Calculate duration based on time to next event or end of video
+        // Minimum duration: 5 seconds to ensure highlights are viewable
+        const MIN_HIGHLIGHT_DURATION = 5.0;
+        let endTime: number;
 
-      const startTime = event.timestamp;
-      const duration = endTime - startTime;
+        if (index < filteredEvents.length - 1) {
+          // Use time to next event as the end time
+          const nextEvent = filteredEvents[index + 1];
+          const timeToNextEvent = nextEvent.timestamp - event.timestamp;
 
-      return {
-        event,
-        startTime,
-        endTime,
-        duration,
-      };
-    });
+          // Ensure minimum duration by either using time to next event or minimum duration
+          if (timeToNextEvent >= MIN_HIGHLIGHT_DURATION) {
+            endTime = nextEvent.timestamp;
+          } else {
+            // Events are too close, use minimum duration
+            console.log(
+              `⏱️ Events too close (${timeToNextEvent.toFixed(2)}s):`,
+              `${event.type} at ${event.timestamp.toFixed(2)}s,`,
+              `using minimum ${MIN_HIGHLIGHT_DURATION}s duration`
+            );
+            endTime = Math.min(
+              videoFile.duration,
+              event.timestamp + MIN_HIGHLIGHT_DURATION
+            );
+          }
+        } else {
+          // For the last event, use video duration or add a reasonable buffer
+          endTime = Math.min(videoFile.duration, event.timestamp + 10);
+        }
+
+        const startTime = event.timestamp;
+        const duration = endTime - startTime;
+
+        return {
+          event,
+          startTime,
+          endTime,
+          duration,
+        };
+      })
+      .filter((highlight) => {
+        const isValid = highlight.duration >= 5.0;
+        if (!isValid) {
+          console.warn(
+            `❌ Filtering out highlight:`,
+            `${highlight.event.type} at ${highlight.startTime.toFixed(2)}s,`,
+            `duration: ${highlight.duration.toFixed(2)}s (minimum: 5.0s)`
+          );
+        }
+        return isValid;
+      });
+
+    console.log(
+      `✅ ${created.length} valid highlights created from events (min 5s duration)`
+    );
+    return created;
   })();
 
   const totalHighlights = highlightVideos.length;
