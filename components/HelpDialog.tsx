@@ -104,9 +104,10 @@ export function HelpDialog() {
                     <h4 className="font-medium">Upload Your Video</h4>
                   </div>
                   <p className="text-sm text-muted-foreground pl-8">
-                    Select an MP4 video file of a basketball game. For best
-                    results, use 720p or higher resolution with good lighting
-                    and a steady camera.
+                    Select an MP4 video file of an amateur basketball game. For
+                    best results, use 720p or higher resolution with good
+                    lighting and a steady camera angle showing the full court
+                    and hoop.
                   </p>
                 </div>
 
@@ -115,12 +116,16 @@ export function HelpDialog() {
                     <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold">
                       2
                     </div>
-                    <h4 className="font-medium">Crop the Scoreboard</h4>
+                    <h4 className="font-medium">
+                      Configure Detection Settings
+                    </h4>
                   </div>
                   <p className="text-sm text-muted-foreground pl-8">
-                    Click the crop tool button on the video player. Draw a
-                    rectangle around the scoreboard area to enable OCR-based
-                    score tracking.
+                    Choose sampling rate (1 FPS recommended) and enable
+                    features: Ball Detection tracks the ball, Pose Estimation
+                    analyzes player movements, Jersey Number Detection
+                    identifies individual players, and 3-Point Line Detection
+                    distinguishes shot types.
                   </p>
                 </div>
 
@@ -129,12 +134,14 @@ export function HelpDialog() {
                     <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold">
                       3
                     </div>
-                    <h4 className="font-medium">Configure Settings</h4>
+                    <h4 className="font-medium">Start Analysis</h4>
                   </div>
                   <p className="text-sm text-muted-foreground pl-8">
-                    Choose sampling rate (1 FPS recommended) and optionally
-                    enable advanced features for more detailed analysis. Higher
-                    settings increase processing time.
+                    Click &quot;Start Analysis&quot; and wait for processing to
+                    complete. The system will detect players, track the ball,
+                    identify jersey numbers, recognize actions (shots, passes,
+                    blocks, dunks, etc.), and visually detect scores when the
+                    ball goes through the hoop.
                   </p>
                 </div>
 
@@ -143,12 +150,15 @@ export function HelpDialog() {
                     <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold">
                       4
                     </div>
-                    <h4 className="font-medium">Start Analysis</h4>
+                    <h4 className="font-medium">
+                      Review Statistics & Highlights
+                    </h4>
                   </div>
                   <p className="text-sm text-muted-foreground pl-8">
-                    Click &quot;Start Analysis&quot; and wait for processing to
-                    complete. The system will extract frames, detect players,
-                    read the scoreboard, and infer game events.
+                    Review team and per-player statistics including points, shot
+                    attempts, hit rates, blocks, assists, and more. Watch
+                    auto-generated highlight clips of key moments. Filter events
+                    by player or action type.
                   </p>
                 </div>
 
@@ -157,21 +167,29 @@ export function HelpDialog() {
                     <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold">
                       5
                     </div>
-                    <h4 className="font-medium">Review & Export</h4>
+                    <h4 className="font-medium">Export Results</h4>
                   </div>
                   <p className="text-sm text-muted-foreground pl-8">
                     Review the detected events on the timeline and charts. Click
                     events to jump to that moment in the video. Export results
-                    as JSON or CSV for further analysis.
+                    as JSON or CSV for further analysis or share with your team.
                   </p>
                 </div>
               </div>
 
-              <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <p className="text-sm text-yellow-800">
-                  <strong>Pro Tip:</strong> Start with broadcast-quality or
-                  steady amateur footage for the most accurate results. The
-                  quality checker will give you feedback on your video.
+              <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  <strong>💡 Best Practices for Amateur Videos:</strong>
+                  <br />
+                  • Use a tripod or stable camera position showing the full
+                  court
+                  <br />
+                  • Ensure the basketball hoop is visible in the frame
+                  <br />
+                  • Good lighting helps with player and jersey detection
+                  <br />
+                  • Higher resolution (1080p) improves jersey number recognition
+                  <br />• Avoid excessive camera movement or zoom during play
                 </p>
               </div>
             </div>

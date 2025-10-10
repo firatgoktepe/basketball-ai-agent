@@ -42,18 +42,43 @@ export function Highlights({
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Create highlight videos from timeline events
+  // Create highlight videos from timeline events or use pre-extracted highlights
   const highlightVideos: HighlightVideo[] = (() => {
+    // If highlights are pre-extracted, use them
+    if (gameData.highlights && gameData.highlights.length > 0) {
+      return gameData.highlights.map((highlight) => {
+        const event = gameData.events.find((e) => e.id === highlight.eventId);
+        return {
+          event: event || {
+            id: highlight.eventId,
+            type: highlight.eventType as any,
+            teamId: highlight.teamId,
+            timestamp: highlight.startTime,
+            confidence: 1,
+            source: "highlight",
+          },
+          startTime: highlight.startTime,
+          endTime: highlight.endTime,
+          duration: highlight.duration,
+        };
+      });
+    }
+
+    // Otherwise, create from significant events
     const filteredEvents = gameData.events
       .filter(
         (event) =>
           event.type === "score" ||
+          event.type === "dunk" ||
+          event.type === "block" ||
+          event.type === "steal" ||
+          event.type === "3pt" ||
+          event.type === "assist" ||
           event.type === "shot_attempt" ||
           event.type === "missed_shot" ||
           event.type === "offensive_rebound" ||
           event.type === "defensive_rebound" ||
-          event.type === "turnover" ||
-          event.type === "steal"
+          event.type === "turnover"
       )
       .sort((a, b) => a.timestamp - b.timestamp);
 
@@ -93,16 +118,23 @@ export function Highlights({
   const getEventIcon = (eventType: string) => {
     switch (eventType) {
       case "score":
+      case "dunk":
+      case "3pt":
         return <Trophy className="w-4 h-4 text-green-600" />;
       case "shot_attempt":
       case "missed_shot":
         return <Target className="w-4 h-4 text-blue-600" />;
+      case "block":
+      case "steal":
+        return <AlertTriangle className="w-4 h-4 text-red-600" />;
+      case "assist":
+      case "pass":
+        return <RotateCcw className="w-4 h-4 text-blue-600" />;
       case "offensive_rebound":
       case "defensive_rebound":
         return <RotateCcw className="w-4 h-4 text-purple-600" />;
       case "turnover":
-      case "steal":
-        return <AlertTriangle className="w-4 h-4 text-red-600" />;
+        return <AlertTriangle className="w-4 h-4 text-orange-600" />;
       default:
         return <Clock className="w-4 h-4 text-gray-600" />;
     }
@@ -111,16 +143,23 @@ export function Highlights({
   const getEventColor = (eventType: string) => {
     switch (eventType) {
       case "score":
+      case "dunk":
+      case "3pt":
         return "bg-green-50 border-green-200 text-green-800";
       case "shot_attempt":
       case "missed_shot":
+        return "bg-blue-50 border-blue-200 text-blue-800";
+      case "block":
+      case "steal":
+        return "bg-red-50 border-red-200 text-red-800";
+      case "assist":
+      case "pass":
         return "bg-blue-50 border-blue-200 text-blue-800";
       case "offensive_rebound":
       case "defensive_rebound":
         return "bg-purple-50 border-purple-200 text-purple-800";
       case "turnover":
-      case "steal":
-        return "bg-red-50 border-red-200 text-red-800";
+        return "bg-orange-50 border-orange-200 text-orange-800";
       default:
         return "bg-gray-50 border-gray-200 text-gray-800";
     }

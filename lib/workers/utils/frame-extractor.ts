@@ -44,39 +44,38 @@ export async function extractFrames(
 
             video.onseeked = () => {
               try {
+                // Validate video dimensions before processing
+                const width = video.videoWidth || 800;
+                const height = video.videoHeight || 600;
+
+                if (width <= 0 || height <= 0 || !isFinite(width) || !isFinite(height)) {
+                  console.warn(`Invalid video dimensions at frame ${currentFrame}: ${width}x${height}, using defaults`);
+                  frames.push(new ImageData(800, 600));
+                  currentFrame++;
+                  setTimeout(captureFrame, 0);
+                  return;
+                }
+
                 // Check if OffscreenCanvas is available
                 if (typeof OffscreenCanvas !== "undefined") {
-                  const canvas = new OffscreenCanvas(
-                    video.videoWidth,
-                    video.videoHeight
-                  );
+                  const canvas = new OffscreenCanvas(width, height);
                   const ctx = canvas.getContext("2d");
 
                   if (ctx) {
                     ctx.drawImage(video, 0, 0);
-                    const imageData = ctx.getImageData(
-                      0,
-                      0,
-                      canvas.width,
-                      canvas.height
-                    );
+                    const imageData = ctx.getImageData(0, 0, width, height);
                     frames.push(imageData);
                   }
                 } else {
                   // Fallback: create a regular canvas and convert
                   const canvas = document.createElement("canvas");
-                  canvas.width = video.videoWidth;
-                  canvas.height = video.videoHeight;
+                  canvas.width = width;
+                  canvas.height = height;
                   const ctx = canvas.getContext("2d");
 
                   if (ctx) {
                     ctx.drawImage(video, 0, 0);
-                    const imageData = ctx.getImageData(
-                      0,
-                      0,
-                      canvas.width,
-                      canvas.height
-                    );
+                    const imageData = ctx.getImageData(0, 0, width, height);
                     frames.push(imageData);
                   }
                 }

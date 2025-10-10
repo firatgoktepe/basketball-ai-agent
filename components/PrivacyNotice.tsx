@@ -39,7 +39,8 @@ export function PrivacyNotice({ className = "" }: PrivacyNoticeProps) {
             <ul className="mt-1 space-y-0.5 ml-4">
               <li>• Process only videos you have the right to use</li>
               <li>• Export and delete your data at any time</li>
-              <li>• No face recognition or player identification</li>
+              <li>• No face recognition - only jersey numbers are detected</li>
+              <li>• All player data stays on your device</li>
             </ul>
           </div>
         </div>

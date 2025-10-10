@@ -79,6 +79,26 @@ export function GameSummary({ gameData }: GameSummaryProps) {
                 <div className="font-semibold">{summaryA.shotAttempts}</div>
               </div>
               <div>
+                <div className="text-muted-foreground">Foul Shots</div>
+                <div className="font-semibold">{summaryA.foulShots || 0}</div>
+              </div>
+              <div>
+                <div className="text-muted-foreground">Dunks</div>
+                <div className="font-semibold">{summaryA.dunks || 0}</div>
+              </div>
+              <div>
+                <div className="text-muted-foreground">Blocks</div>
+                <div className="font-semibold">{summaryA.blocks || 0}</div>
+              </div>
+              <div>
+                <div className="text-muted-foreground">Assists</div>
+                <div className="font-semibold">{summaryA.assists || 0}</div>
+              </div>
+              <div>
+                <div className="text-muted-foreground">Passes</div>
+                <div className="font-semibold">{summaryA.passes || 0}</div>
+              </div>
+              <div>
                 <div className="text-muted-foreground">Off. Rebounds</div>
                 <div className="font-semibold">{summaryA.offRebounds}</div>
               </div>
@@ -90,7 +110,35 @@ export function GameSummary({ gameData }: GameSummaryProps) {
                 <div className="text-muted-foreground">Turnovers</div>
                 <div className="font-semibold">{summaryA.turnovers}</div>
               </div>
+              <div>
+                <div className="text-muted-foreground">Dribbles</div>
+                <div className="font-semibold">{summaryA.dribbles || 0}</div>
+              </div>
             </div>
+
+            {/* Player Stats (if available) */}
+            {summaryA.players && summaryA.players.length > 0 && (
+              <div className="bg-muted/30 rounded-lg p-3 mt-3">
+                <div className="text-xs text-muted-foreground mb-2">
+                  Top Players
+                </div>
+                <div className="space-y-2">
+                  {summaryA.players.slice(0, 3).map((player) => (
+                    <div
+                      key={player.playerId}
+                      className="flex justify-between text-sm"
+                    >
+                      <span className="text-muted-foreground">
+                        #{player.playerId}
+                      </span>
+                      <span className="font-semibold">
+                        {player.points} pts, {player.shotAttempts} att
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -137,6 +185,26 @@ export function GameSummary({ gameData }: GameSummaryProps) {
                 <div className="font-semibold">{summaryB.shotAttempts}</div>
               </div>
               <div>
+                <div className="text-muted-foreground">Foul Shots</div>
+                <div className="font-semibold">{summaryB.foulShots || 0}</div>
+              </div>
+              <div>
+                <div className="text-muted-foreground">Dunks</div>
+                <div className="font-semibold">{summaryB.dunks || 0}</div>
+              </div>
+              <div>
+                <div className="text-muted-foreground">Blocks</div>
+                <div className="font-semibold">{summaryB.blocks || 0}</div>
+              </div>
+              <div>
+                <div className="text-muted-foreground">Assists</div>
+                <div className="font-semibold">{summaryB.assists || 0}</div>
+              </div>
+              <div>
+                <div className="text-muted-foreground">Passes</div>
+                <div className="font-semibold">{summaryB.passes || 0}</div>
+              </div>
+              <div>
                 <div className="text-muted-foreground">Off. Rebounds</div>
                 <div className="font-semibold">{summaryB.offRebounds}</div>
               </div>
@@ -148,7 +216,35 @@ export function GameSummary({ gameData }: GameSummaryProps) {
                 <div className="text-muted-foreground">Turnovers</div>
                 <div className="font-semibold">{summaryB.turnovers}</div>
               </div>
+              <div>
+                <div className="text-muted-foreground">Dribbles</div>
+                <div className="font-semibold">{summaryB.dribbles || 0}</div>
+              </div>
             </div>
+
+            {/* Player Stats (if available) */}
+            {summaryB.players && summaryB.players.length > 0 && (
+              <div className="bg-muted/30 rounded-lg p-3 mt-3">
+                <div className="text-xs text-muted-foreground mb-2">
+                  Top Players
+                </div>
+                <div className="space-y-2">
+                  {summaryB.players.slice(0, 3).map((player) => (
+                    <div
+                      key={player.playerId}
+                      className="flex justify-between text-sm"
+                    >
+                      <span className="text-muted-foreground">
+                        #{player.playerId}
+                      </span>
+                      <span className="font-semibold">
+                        {player.points} pts, {player.shotAttempts} att
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

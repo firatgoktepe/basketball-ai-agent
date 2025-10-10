@@ -61,6 +61,13 @@ function cropImageData(
   cropRegion: { x: number; y: number; width: number; height: number }
 ): ImageData {
   const { x, y, width, height } = cropRegion;
+
+  // Validate dimensions
+  if (!isFinite(width) || !isFinite(height) || width <= 0 || height <= 0) {
+    console.warn("Invalid crop region dimensions in ocr.ts, returning 1x1 placeholder");
+    return new ImageData(1, 1);
+  }
+
   const croppedData = new ImageData(width, height);
 
   for (let row = 0; row < height; row++) {

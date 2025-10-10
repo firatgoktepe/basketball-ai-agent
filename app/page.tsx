@@ -78,9 +78,10 @@ export default function Home() {
       enableBallDetection: boolean;
       enablePoseEstimation: boolean;
       enable3ptEstimation: boolean;
+      enableJerseyNumberDetection?: boolean;
       forceMockPoseModel?: boolean;
     }) => {
-      if (!videoFile || !cropRegion) return;
+      if (!videoFile) return;
 
       setIsProcessing(true);
       setProgress({
@@ -105,11 +106,12 @@ export default function Home() {
         const result = await worker.analyzeVideo(
           {
             videoFile,
-            cropRegion,
+            cropRegion: cropRegion ? cropRegion : undefined, // Convert null to undefined
             samplingRate: options.samplingRate,
             enableBallDetection: options.enableBallDetection,
             enablePoseEstimation: options.enablePoseEstimation,
             enable3ptEstimation: options.enable3ptEstimation,
+            enableJerseyNumberDetection: options.enableJerseyNumberDetection,
             forceMockPoseModel: options.forceMockPoseModel,
           },
           (progressData) => {
@@ -185,9 +187,9 @@ export default function Home() {
               Basketball Quick Stats
             </h1>
             <p className="text-center text-muted-foreground max-w-2xl mx-auto text-sm sm:text-base px-4">
-              AI-powered basketball game analysis tool. Upload a video, crop the
-              scoreboard, and get detailed game statistics automatically
-              extracted from the footage.
+              AI-powered amateur basketball game analysis tool. Upload a video
+              and get detailed player statistics, action recognition, and
+              highlight clips automatically extracted from the footage.
             </p>
           </header>
 
@@ -233,30 +235,12 @@ export default function Home() {
                   />
                 </div>
 
-                {/* Crop Region Status */}
-                {cropRegion && (
-                  <div className="text-center px-4">
-                    <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-100 text-green-800 rounded-lg">
-                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                      <span className="text-sm font-medium">
-                        Scoreboard region selected (
-                        {Math.round(cropRegion.width)}×
-                        {Math.round(cropRegion.height)})
-                      </span>
-                    </div>
-                    <p className="text-xs sm:text-sm text-muted-foreground mt-2">
-                      Click the crop tool button on the video to adjust the
-                      region
-                    </p>
-                  </div>
-                )}
-
                 {/* Processing Controls */}
-                {cropRegion && !isProcessing && !gameData && (
+                {!isProcessing && !gameData && (
                   <div className="max-w-2xl mx-auto px-4">
                     <ProcessingControls
                       onStartAnalysis={handleStartAnalysis}
-                      disabled={!cropRegion}
+                      disabled={false}
                     />
                   </div>
                 )}

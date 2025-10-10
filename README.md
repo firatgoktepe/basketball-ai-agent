@@ -1,15 +1,17 @@
 # Basketball Quick Stats
 
-AI-powered basketball game analysis tool for extracting statistics from video footage.
+AI-powered amateur basketball game analysis tool for extracting player statistics and highlights from video footage.
 
 ## Features
 
-- **Video Analysis**: Upload MP4 videos and extract game statistics automatically
-- **Scoreboard OCR**: Crop and read scoreboard to track score changes
-- **Player Detection**: Detect players and cluster them into teams
-- **Event Detection**: Identify shots, rebounds, turnovers, and other game events
+- **Video Analysis**: Upload MP4 videos of amateur basketball games and extract comprehensive statistics
+- **Player Tracking**: Detect and track individual players by jersey number
+- **Visual Score Detection**: Automatically detect scores by tracking ball movement through the hoop
+- **Action Recognition**: Identify shots, dunks, blocks, passes, assists, rebounds, and more
+- **Per-Player Statistics**: Track detailed stats for each player including points, hit rate, assists, blocks
+- **Highlight Generation**: Auto-create highlight clips of key moments (dunks, 3-pointers, blocks, etc.)
 - **Interactive Timeline**: Click on events to seek to specific moments in the video
-- **Data Export**: Export results as JSON or CSV files
+- **Data Export**: Export team and player statistics as JSON or CSV files
 
 ## Technology Stack
 
@@ -37,20 +39,34 @@ AI-powered basketball game analysis tool for extracting statistics from video fo
 
 ## Usage
 
-1. **Upload Video**: Select an MP4 video file (up to 500MB)
-2. **Crop Scoreboard**: Draw a rectangle around the scoreboard area
-3. **Configure Analysis**: Choose sampling rate and enable advanced features
-4. **Start Analysis**: The system will process the video and extract statistics
-5. **Review Results**: View timeline, charts, and event details
-6. **Export Data**: Download results as JSON or CSV
+1. **Upload Video**: Select an MP4 video file of an amateur basketball game (up to 500MB)
+2. **Configure Analysis**: Choose sampling rate and enable features:
+   - Ball Detection: Track ball movement and trajectory
+   - Pose Estimation: Analyze player body poses for action recognition
+   - Jersey Number Detection: Identify individual players
+   - 3-Point Line Detection: Distinguish 2-point from 3-point shots
+3. **Start Analysis**: The system will:
+   - Detect and track all players throughout the video
+   - Identify jersey numbers for per-player statistics
+   - Track the ball and detect when it goes through the hoop
+   - Recognize actions: shots, dunks, blocks, passes, assists, layups, etc.
+   - Generate highlight clips of key moments
+4. **Review Results**:
+   - View team and per-player statistics
+   - Watch auto-generated highlight clips
+   - Explore timeline with all detected events
+   - Filter events by player or action type
+5. **Export Data**: Download comprehensive statistics as JSON or CSV
 
-## Recommended Video Quality
+## Recommended Video Quality (Amateur Videos)
 
-- Resolution: 720p or higher
-- Clear, steady footage (avoid shaky camera)
-- Good lighting conditions
-- Visible scoreboard in the frame
-- Duration: 2-10 minutes for best results
+- **Resolution**: 1080p recommended (720p minimum) for jersey number detection
+- **Camera Setup**: Use tripod or stable mount showing full court and hoop
+- **Hoop Visibility**: Basketball hoop must be clearly visible in frame for score detection
+- **Lighting**: Good lighting helps with player detection and jersey recognition
+- **Camera Angle**: Side-court or elevated view capturing full court preferred
+- **Duration**: 2-10 minutes for best results
+- **Video Quality**: Avoid excessive compression, motion blur, or camera shake
 
 ## Architecture
 
@@ -63,20 +79,24 @@ The application uses a client-side processing approach:
 
 ## Development Status
 
-This is a work in progress. Current implementation includes:
+Current implementation includes:
 
 - ✅ Basic UI and video player
 - ✅ Video upload and frame extraction
-- ✅ Scoreboard cropping tool
 - ✅ Processing controls and progress tracking
+- ✅ Player detection and team clustering
+- ✅ Visual score detection (ball-through-hoop tracking)
+- ✅ Jersey number detection and player tracking
+- ✅ Enhanced action recognition (blocks, dunks, passes, assists, layups, etc.)
+- ✅ Per-player statistics generation
+- ✅ Highlight clip extraction and filtering
 - ✅ Results display with charts and timeline
 - ✅ Tooltips and help system
 - ✅ Video quality checker
 - ✅ Performance monitoring
 - ✅ Test infrastructure and evaluation framework
-- 🚧 AI model integration (in progress)
-- 🚧 Event detection algorithms (in progress)
-- 🚧 Performance optimization (in progress)
+- 🚧 Camera calibration for improved 3-point detection (in progress)
+- 🚧 Advanced player re-identification algorithms (in progress)
 
 ## Testing
 
@@ -94,10 +114,14 @@ npm run test:eval -- --verbose
 
 ### Test Coverage
 
-- **Annotated test clips** with ground truth data
+- **Annotated test clips** with ground truth data (amateur basketball footage)
 - **Accuracy metrics**: Precision, recall, F1 scores for all event types
 - **Performance benchmarks**: Processing time and memory usage
-- **Quality thresholds**: Score OCR ≥95%, Team attribution ≥80%, Shot inference ≥60%
+- **Quality thresholds**:
+  - Visual score detection ≥70%
+  - Team attribution ≥80%
+  - Action detection (shots, rebounds, blocks, etc.) ≥60-70%
+  - Jersey number recognition ≥75% when visible
 
 See [TESTING.md](./TESTING.md) for detailed testing documentation.
 

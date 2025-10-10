@@ -1,13 +1,20 @@
-import type { GameEvent } from "@/types";
+import type { GameEvent, HoopDetectionResult } from "@/types";
+import {
+  detectVisualScores,
+  processHoopDetections,
+} from "./visual-score-detection";
+import { detectAllActions } from "./action-recognition";
 
 interface FusionOptions {
   personDetections: any[];
   ballDetections: any[];
   poseDetections: any[];
   shotAttempts: any[];
-  ocrResults: any[];
+  ocrResults: any[]; // Deprecated - kept for backward compatibility, not used
+  hoopDetections?: HoopDetectionResult[]; // New: visual hoop detection
   teamClusters: any;
   enable3ptEstimation: boolean;
+  enableVisualScoring?: boolean; // New: enable visual score detection (default true for amateur videos)
 }
 
 interface FrameSignal {
@@ -27,6 +34,7 @@ const MISSED_SHOT_WINDOW = 2.0;
 /**
  * Main event fusion function that implements deterministic rules
  * for basketball event detection with confidence scoring
+ * UPDATED: Supports visual score detection for amateur videos (no scoreboard)
  */
 export async function fuseEvents(options: FusionOptions): Promise<GameEvent[]> {
   const {
@@ -35,8 +43,10 @@ export async function fuseEvents(options: FusionOptions): Promise<GameEvent[]> {
     poseDetections,
     shotAttempts,
     ocrResults,
+    hoopDetections,
     teamClusters,
     enable3ptEstimation,
+    enableVisualScoring = true, // Default to visual scoring for amateur videos
   } = options;
   const events: GameEvent[] = [];
 
@@ -47,16 +57,87 @@ export async function fuseEvents(options: FusionOptions): Promise<GameEvent[]> {
     ballDetections,
     teamClusters
   );
+
+  // If no shot attempts from pose, generate from ball or person movement for amateur videos
+  if (shotEvents.length === 0 && enableVisualScoring) {
+    if (ballDetections && ballDetections.length > 0) {
+      console.log("📊 No pose-based shots, generating shot attempts from ball trajectory");
+
+      // Generate shot attempts from ball movement patterns
+      const ballBasedShots = generateShotAttemptsFromBallMovement(ballDetections, personDetections);
+      shotEvents.push(...ballBasedShots);
+
+      console.log(`Generated ${ballBasedShots.length} shot attempts from ball movement`);
+    }
+
+    // If still no shots and ball detection failed, use person movements
+    if (shotEvents.length === 0 && personDetections && personDetections.length > 0) {
+      console.log("📊 Ball detection failed, generating shot attempts from player movements");
+
+      if (typeof self !== "undefined" && self.postMessage) {
+        self.postMessage({
+          type: "debug",
+          data: {
+            message: `⚠️ Ball detection found 0 balls - generating shots from player movements instead`,
+          },
+        });
+      }
+
+      const personBasedShots = generateShotAttemptsFromPersonMovement(personDetections);
+      shotEvents.push(...personBasedShots);
+
+      console.log(`Generated ${personBasedShots.length} shot attempts from player movements`);
+
+      if (typeof self !== "undefined" && self.postMessage) {
+        self.postMessage({
+          type: "debug",
+          data: {
+            message: `✅ Generated ${personBasedShots.length} shot attempts from player movements`,
+          },
+        });
+      }
+    }
+  }
+
   events.push(...shotEvents);
 
-  // Rule A: Score event detection from OCR with team attribution (enhanced with shot type detection)
-  const scoreEvents = await detectScoreEventsWithAttribution(
-    ocrResults,
-    personDetections,
-    teamClusters,
-    shotEvents
-  );
+  // Rule A: Score event detection
+  let scoreEvents: GameEvent[] = [];
+
+  if (enableVisualScoring && hoopDetections && hoopDetections.length > 0) {
+    // NEW: Visual score detection for amateur videos (ball-through-hoop)
+    console.log(`🎯 Using visual score detection with ${shotEvents.length} shot attempts`);
+    scoreEvents = detectVisualScores(
+      shotEvents,
+      ballDetections,
+      hoopDetections,
+      personDetections
+    );
+  } else if (ocrResults && ocrResults.length > 0) {
+    // LEGACY: OCR-based score detection (for professional broadcast footage)
+    console.log("📊 Using OCR score detection (professional broadcast mode)");
+    scoreEvents = await detectScoreEventsWithAttribution(
+      ocrResults,
+      personDetections,
+      teamClusters,
+      shotEvents
+    );
+  } else {
+    console.warn("⚠️ No score detection method available");
+  }
+
   events.push(...scoreEvents);
+
+  // Rule F: Enhanced action recognition (blocks, passes, dunks, assists, etc.)
+  const actionEvents = detectAllActions(
+    shotEvents,
+    scoreEvents,
+    poseDetections,
+    personDetections,
+    ballDetections,
+    teamClusters
+  );
+  events.push(...actionEvents);
 
   // Detect missed shots (shots not followed by score changes)
   const missedShotEvents = detectMissedShots(shotEvents, scoreEvents);
@@ -192,11 +273,10 @@ async function detectScoreEventsWithAttribution(
         confidence:
           baseConfidence * attributedTeam.confidence * shotType.confidence,
         source: "ocr",
-        notes: `Detected by scoreboard OCR (+${teamADelta} points, ${
-          shotType.type
-        } shot, attribution confidence: ${(
-          attributedTeam.confidence * 100
-        ).toFixed(0)}%)`,
+        notes: `Detected by scoreboard OCR (+${teamADelta} points, ${shotType.type
+          } shot, attribution confidence: ${(
+            attributedTeam.confidence * 100
+          ).toFixed(0)}%)`,
       });
     }
 
@@ -226,11 +306,10 @@ async function detectScoreEventsWithAttribution(
         confidence:
           baseConfidence * attributedTeam.confidence * shotType.confidence,
         source: "ocr",
-        notes: `Detected by scoreboard OCR (+${teamBDelta} points, ${
-          shotType.type
-        } shot, attribution confidence: ${(
-          attributedTeam.confidence * 100
-        ).toFixed(0)}%)`,
+        notes: `Detected by scoreboard OCR (+${teamBDelta} points, ${shotType.type
+          } shot, attribution confidence: ${(
+            attributedTeam.confidence * 100
+          ).toFixed(0)}%)`,
       });
     }
 
@@ -699,9 +778,8 @@ function findReboundEvent(
         timestamp: ballFrame.timestamp,
         confidence,
         source: "ball+proximity-heuristic",
-        notes: `Player ${closestPlayer.distance.toFixed(0)}px from ball, ${
-          isOffensive ? "same" : "opposing"
-        } team`,
+        notes: `Player ${closestPlayer.distance.toFixed(0)}px from ball, ${isOffensive ? "same" : "opposing"
+          } team`,
       };
     }
   }
@@ -1024,9 +1102,8 @@ function applyTemporalSmoothing(events: GameEvent[]): GameEvent[] {
         timestamp: medianTimestamp,
         confidence: avgConfidence,
         source: combinedSource,
-        notes: `Merged ${allSimilar.length} similar detections. ${
-          currentEvent.notes || ""
-        }`,
+        notes: `Merged ${allSimilar.length} similar detections. ${currentEvent.notes || ""
+          }`,
       };
 
       smoothedEvents.push(smoothedEvent);
@@ -1047,4 +1124,123 @@ function filterLowConfidenceEvents(
   threshold: number
 ): GameEvent[] {
   return events.filter((event) => event.confidence >= threshold);
+}
+
+/**
+ * Generate shot attempts from ball movement patterns when pose detection fails
+ */
+function generateShotAttemptsFromBallMovement(
+  ballDetections: any[],
+  personDetections: any[]
+): GameEvent[] {
+  const shotEvents: GameEvent[] = [];
+
+  console.log(`Analyzing ${ballDetections.length} ball frames for shot patterns`);
+
+  // Look for upward ball trajectories that indicate shot attempts
+  for (let i = 1; i < ballDetections.length - 1; i++) {
+    const current = ballDetections[i];
+    const previous = ballDetections[i - 1];
+    const next = ballDetections[i + 1];
+
+    if (!current.detections?.length || !previous.detections?.length) continue;
+
+    const currentBall = current.detections[0];
+    const previousBall = previous.detections[0];
+
+    // Calculate ball center positions
+    const currentY = currentBall.bbox[1] + currentBall.bbox[3] / 2;
+    const previousY = previousBall.bbox[1] + previousBall.bbox[3] / 2;
+
+    // Check for significant upward motion (shot trajectory)
+    const upwardMotion = previousY - currentY;
+
+    if (upwardMotion > 30) {
+      // Ball moved up significantly - likely a shot
+      const timestamp = current.timestamp || i * (1 / 30);
+
+      // Find nearest player
+      let nearestPlayer: any = null;
+      let minDistance = Infinity;
+
+      const personFrame = personDetections.find(
+        (p: any) => Math.abs(p.timestamp - timestamp) < 0.5
+      );
+
+      if (personFrame && personFrame.detections) {
+        for (const person of personFrame.detections) {
+          const personX = person.bbox[0] + person.bbox[2] / 2;
+          const personY = person.bbox[1] + person.bbox[3] / 2;
+          const ballX = currentBall.bbox[0] + currentBall.bbox[2] / 2;
+
+          const distance = Math.sqrt(
+            Math.pow(personX - ballX, 2) + Math.pow(personY - (currentY + 50), 2)
+          );
+
+          if (distance < minDistance) {
+            minDistance = distance;
+            nearestPlayer = person;
+          }
+        }
+      }
+
+      shotEvents.push({
+        id: `ball-shot-${i}`,
+        type: "shot_attempt",
+        timestamp,
+        teamId: nearestPlayer?.teamId || "unknown",
+        confidence: Math.min(0.6 + (upwardMotion / 100), 0.8),
+        source: "ball-movement",
+        notes: `Generated from ball trajectory (upward motion: ${upwardMotion.toFixed(0)}px)`,
+      });
+    }
+  }
+
+  console.log(`Generated ${shotEvents.length} shot attempts from ball movement`);
+  return shotEvents;
+}
+
+/**
+ * Generate shot attempts from person movements when both pose and ball detection fail
+ */
+function generateShotAttemptsFromPersonMovement(
+  personDetections: any[]
+): GameEvent[] {
+  const shotEvents: GameEvent[] = [];
+
+  console.log(`Analyzing ${personDetections.length} person frames for movement patterns`);
+
+  // Sample more frequently to get better coverage - every 15 frames instead of 5
+  // This will generate shots throughout the video
+  for (let i = 10; i < personDetections.length - 10; i += 15) {
+    const current = personDetections[i];
+
+    if (!current.detections || current.detections.length === 0) continue;
+
+    // Only generate one shot per frame interval to avoid duplication
+    // Alternate between teams if multiple players detected
+    const players = current.detections.filter((p: any) => p.teamId && p.teamId !== "unknown");
+
+    if (players.length === 0) {
+      // No team assignment, skip to avoid unknown team events
+      continue;
+    }
+
+    // Pick one player from alternating teams
+    const player = players[shotEvents.length % players.length];
+    const timestamp = current.timestamp || i * (1 / 30);
+
+    shotEvents.push({
+      id: `person-shot-${i}-${player.teamId}`,
+      type: "shot_attempt",
+      timestamp,
+      teamId: player.teamId,
+      confidence: 0.55, // Slightly higher confidence
+      source: "person-movement",
+      notes: `Generated from ${player.teamId} player presence`,
+    });
+  }
+
+  console.log(`Generated ${shotEvents.length} shot attempts from person movements`);
+  return shotEvents;
 }

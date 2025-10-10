@@ -21,26 +21,42 @@ export function extractJerseyColors(
     `🔍 Extracting jersey colors from ${detections.length} detection frames`
   );
 
-  for (const result of detections) {
+  // Limit processing to avoid hanging on large datasets
+  const maxFramesToProcess = Math.min(detections.length, 30);
+  console.log(`📊 Processing first ${maxFramesToProcess} frames for color extraction`);
+
+  for (let i = 0; i < maxFramesToProcess; i++) {
+    const result = detections[i];
     const frame = frames[result.frameIndex];
+
     if (!frame) {
       console.warn(`⚠️ Frame ${result.frameIndex} not found`);
       continue;
     }
 
+    // Validate frame data
+    if (!frame.data || frame.width <= 0 || frame.height <= 0) {
+      console.warn(`⚠️ Invalid frame data at index ${result.frameIndex}`);
+      continue;
+    }
+
+    if (i % 10 === 0) {
+      console.log(`🔍 Processing frame ${i}/${maxFramesToProcess}...`);
+    }
+
     for (const detection of result.detections) {
-      const colors = extractColorsFromBbox(frame, detection.bbox);
-      console.log(
-        `🎨 Extracted ${colors.length} colors from bbox:`,
-        detection.bbox
-      );
-      colorSamples.push(
-        ...colors.map((color) => ({
-          ...color,
-          frameIndex: result.frameIndex,
-          bbox: detection.bbox,
-        }))
-      );
+      try {
+        const colors = extractColorsFromBbox(frame, detection.bbox);
+        colorSamples.push(
+          ...colors.map((color) => ({
+            ...color,
+            frameIndex: result.frameIndex,
+            bbox: detection.bbox,
+          }))
+        );
+      } catch (error) {
+        console.error(`Error extracting colors from bbox:`, error);
+      }
     }
   }
 
@@ -66,6 +82,12 @@ function extractColorsFromBbox(
     v: number;
   }> = [];
 
+  // Validate frame data is accessible
+  if (!frame.data || frame.data.length === 0) {
+    console.error("Frame data is empty or detached");
+    return colors;
+  }
+
   // Focus on the torso area (upper 60% of the person)
   const torsoHeight = Math.floor(height * 0.6);
   const torsoY = y;
@@ -85,6 +107,12 @@ function extractColorsFromBbox(
         pixelY < frame.height
       ) {
         const pixelIndex = (pixelY * frame.width + pixelX) * 4;
+
+        // Check if index is within bounds
+        if (pixelIndex + 3 >= frame.data.length) {
+          continue;
+        }
+
         const r = frame.data[pixelIndex];
         const g = frame.data[pixelIndex + 1];
         const b = frame.data[pixelIndex + 2];
@@ -207,8 +235,8 @@ export function clusterColorsByKMeans(
       for (let i = 0; i < clusters.length; i++) {
         const distance = Math.sqrt(
           Math.pow(sample.r - clusters[i].centroid.r, 2) +
-            Math.pow(sample.g - clusters[i].centroid.g, 2) +
-            Math.pow(sample.b - clusters[i].centroid.b, 2)
+          Math.pow(sample.g - clusters[i].centroid.g, 2) +
+          Math.pow(sample.b - clusters[i].centroid.b, 2)
         );
 
         if (distance < minDistance) {
@@ -262,8 +290,7 @@ function assignTeamIds(
     console.log(
       `Cluster ${i}: RGB(${Math.round(r)}, ${Math.round(g)}, ${Math.round(
         b
-      )}) HSV(${h.toFixed(1)}, ${s.toFixed(2)}, ${v.toFixed(2)}) - ${
-        cluster.samples.length
+      )}) HSV(${h.toFixed(1)}, ${s.toFixed(2)}, ${v.toFixed(2)}) - ${cluster.samples.length
       } samples`
     );
 
@@ -281,8 +308,8 @@ function assignTeamIds(
     const cluster2 = clusters[1];
     const distance = Math.sqrt(
       Math.pow(cluster1.centroid.r - cluster2.centroid.r, 2) +
-        Math.pow(cluster1.centroid.g - cluster2.centroid.g, 2) +
-        Math.pow(cluster1.centroid.b - cluster2.centroid.b, 2)
+      Math.pow(cluster1.centroid.g - cluster2.centroid.g, 2) +
+      Math.pow(cluster1.centroid.b - cluster2.centroid.b, 2)
     );
 
     console.log(`📏 Color distance between clusters: ${distance.toFixed(1)}`);

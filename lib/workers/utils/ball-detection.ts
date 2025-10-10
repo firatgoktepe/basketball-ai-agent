@@ -18,14 +18,47 @@ interface BallTracker {
 
 export async function detectBall(
   frames: ImageData[],
-  onnxDetector?: ONNXBallDetector
+  onnxDetector?: ONNXBallDetector,
+  samplingRate: number = 1,
+  videoDuration: number = 0
 ): Promise<DetectionResult[]> {
   const results: DetectionResult[] = [];
   const tracker = new BallTracker();
 
+  console.log(`[Ball Detection] Starting detection on ${frames.length} frames`);
+  
+  const timePerFrame = videoDuration > 0 ? videoDuration / frames.length : 1 / samplingRate;
+  
   for (let i = 0; i < frames.length; i++) {
     const frame = frames[i];
-    const timestamp = i * (1 / 30); // Assuming 30fps, adjust based on actual sampling rate
+    const timestamp = i * timePerFrame;
+
+    // Log progress every 10 frames
+    if (i % 10 === 0) {
+      console.log(`[Ball Detection] Processing frame ${i}/${frames.length}`);
+    }
+
+    // Validate frame dimensions
+    if (!frame || frame.width <= 0 || frame.height <= 0) {
+      console.warn(`Invalid frame dimensions at index ${i}, skipping ball detection`);
+      results.push({
+        frameIndex: i,
+        timestamp,
+        detections: [],
+      });
+      continue;
+    }
+
+    // Validate frame data
+    if (!frame.data || frame.data.length === 0) {
+      console.warn(`Invalid frame data at index ${i}, skipping ball detection`);
+      results.push({
+        frameIndex: i,
+        timestamp,
+        detections: [],
+      });
+      continue;
+    }
 
     let ballDetections: BallDetection[] = [];
 
@@ -38,12 +71,12 @@ export async function detectBall(
           confidence: result.confidence,
           trajectory: tracker.lastPosition
             ? {
-                x: result.bbox[0] + result.bbox[2] / 2,
-                y: result.bbox[1] + result.bbox[3] / 2,
-                velocity: tracker.velocity
-                  ? Math.sqrt(tracker.velocity.x ** 2 + tracker.velocity.y ** 2)
-                  : 0,
-              }
+              x: result.bbox[0] + result.bbox[2] / 2,
+              y: result.bbox[1] + result.bbox[3] / 2,
+              velocity: tracker.velocity
+                ? Math.sqrt(tracker.velocity.x ** 2 + tracker.velocity.y ** 2)
+                : 0,
+            }
             : undefined,
         }));
       } catch (error) {
@@ -70,6 +103,8 @@ export async function detectBall(
     });
   }
 
+  console.log(`[Ball Detection] Completed detection on ${frames.length} frames, found ball in ${results.filter(r => r.detections.length > 0).length} frames`);
+
   return results;
 }
 
@@ -80,23 +115,36 @@ function detectBallInFrame(
   const { data, width, height } = frame;
   const detections: BallDetection[] = [];
 
-  // HSV color range for orange basketball
+  // Validate data
+  if (!data || data.length === 0) {
+    return detections;
+  }
+
+  // HSV color range for basketball - MUCH more permissive for amateur videos
   const orangeRange = {
-    hMin: 5, // Orange hue minimum
-    hMax: 25, // Orange hue maximum
-    sMin: 100, // Saturation minimum
-    sMax: 255, // Saturation maximum
-    vMin: 100, // Value minimum
-    vMax: 255, // Value maximum
+    hMin: 0, // Extended to include red-orange
+    hMax: 40, // Extended to include yellow-orange
+    sMin: 30, // Much lower saturation (was 100)
+    sMax: 255,
+    vMin: 50, // Lower brightness threshold (was 100)
+    vMax: 255,
   };
 
   // Convert RGB to HSV and find orange regions
   const orangePixels: { x: number; y: number }[] = [];
 
-  for (let y = 0; y < height; y += 2) {
-    // Sample every 2nd pixel for performance
-    for (let x = 0; x < width; x += 2) {
+  // Increase sampling step for performance on large images
+  const step = width > 1000 ? 4 : 2; // Sample every 4th pixel for HD, 2nd for smaller
+
+  for (let y = 0; y < height; y += step) {
+    for (let x = 0; x < width; x += step) {
       const index = (y * width + x) * 4;
+
+      // Bounds check
+      if (index + 2 >= data.length) {
+        continue;
+      }
+
       const r = data[index];
       const g = data[index + 1];
       const b = data[index + 2];
@@ -105,7 +153,17 @@ function detectBallInFrame(
 
       if (isInOrangeRange(hsv, orangeRange)) {
         orangePixels.push({ x, y });
+
+        // Limit collection to prevent memory issues
+        if (orangePixels.length > 5000) {
+          break;
+        }
       }
+    }
+
+    // Break outer loop if we hit the limit
+    if (orangePixels.length > 5000) {
+      break;
     }
   }
 
@@ -128,12 +186,12 @@ function detectBallInFrame(
           confidence,
           trajectory: tracker.lastPosition
             ? {
-                x: bbox[0] + bbox[2] / 2,
-                y: bbox[1] + bbox[3] / 2,
-                velocity: tracker.velocity
-                  ? Math.sqrt(tracker.velocity.x ** 2 + tracker.velocity.y ** 2)
-                  : 0,
-              }
+              x: bbox[0] + bbox[2] / 2,
+              y: bbox[1] + bbox[3] / 2,
+              velocity: tracker.velocity
+                ? Math.sqrt(tracker.velocity.x ** 2 + tracker.velocity.y ** 2)
+                : 0,
+            }
             : undefined,
         });
       }
@@ -197,8 +255,14 @@ function clusterOrangePixels(
   const clusters: { x: number; y: number }[][] = [];
   const visited = new Set<string>();
   const maxDistance = 30; // Maximum distance between pixels in same cluster
+  const maxClusters = 20; // Limit number of clusters to prevent hanging
+  const maxIterations = 10000; // Prevent infinite loops
+
+  let iterations = 0;
 
   for (const pixel of pixels) {
+    if (clusters.length >= maxClusters) break;
+
     const key = `${pixel.x},${pixel.y}`;
     if (visited.has(key)) continue;
 
@@ -206,7 +270,8 @@ function clusterOrangePixels(
     const queue = [pixel];
     visited.add(key);
 
-    while (queue.length > 0) {
+    while (queue.length > 0 && iterations < maxIterations) {
+      iterations++;
       const current = queue.shift()!;
       cluster.push(current);
 
@@ -313,7 +378,7 @@ function calculateBallConfidence(
 
     const distance = Math.sqrt(
       (currentCenter.x - expectedPosition.x) ** 2 +
-        (currentCenter.y - expectedPosition.y) ** 2
+      (currentCenter.y - expectedPosition.y) ** 2
     );
 
     const motionFactor = Math.max(0, 1 - distance / 50); // Within 50 pixels

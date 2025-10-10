@@ -20,7 +20,9 @@ export interface ShotAttempt {
 
 export async function extractPoses(
   frames: ImageData[],
-  model: MoveNetPoseEstimator | LocalMoveNetPoseEstimator
+  model: MoveNetPoseEstimator | LocalMoveNetPoseEstimator,
+  samplingRate: number = 1,
+  videoDuration: number = 0
 ): Promise<PoseResult[]> {
   const results: PoseResult[] = [];
 
@@ -34,13 +36,47 @@ export async function extractPoses(
     });
   }
 
+  const timePerFrame = videoDuration > 0 ? videoDuration / frames.length : 1 / samplingRate;
+
   for (let i = 0; i < frames.length; i++) {
     const frame = frames[i];
-    const timestamp = i * (1 / 30); // Assuming 30fps, adjust based on actual sampling rate
+    const timestamp = i * timePerFrame;
+
+    // Log progress
+    if (i % 10 === 0) {
+      console.log(`[Pose Estimation] Processing frame ${i}/${frames.length}`);
+    }
 
     try {
+      // Validate frame dimensions
+      if (!frame || frame.width <= 0 || frame.height <= 0) {
+        console.warn(`Invalid frame dimensions at index ${i}, skipping pose estimation`);
+        results.push({
+          frameIndex: i,
+          timestamp,
+          poses: [],
+        });
+        continue;
+      }
+
+      // Validate frame data
+      if (!frame.data || frame.data.length === 0) {
+        console.warn(`Invalid frame data at index ${i}, skipping pose estimation`);
+        results.push({
+          frameIndex: i,
+          timestamp,
+          poses: [],
+        });
+        continue;
+      }
+
       // Use MoveNet model for pose estimation
       const poses = await model.estimatePoses(frame);
+
+      // Log if no poses detected
+      if (poses.length === 0 && i < 5) {
+        console.log(`[Pose Estimation] Frame ${i}: No poses detected`);
+      }
 
       results.push({
         frameIndex: i,
@@ -104,9 +140,8 @@ export function detectShotAttempts(
     self.postMessage({
       type: "debug",
       data: {
-        message: `🔍 Starting shot detection: ${
-          poseResults.length
-        } pose frames, ${ballDetections?.length || 0} ball detections`,
+        message: `🔍 Starting shot detection: ${poseResults.length
+          } pose frames, ${ballDetections?.length || 0} ball detections`,
       },
     });
   }
@@ -171,6 +206,20 @@ export function detectShotAttempts(
     });
   }
 
+  // If we still have no shot attempts and we have ball detections, use ball movement as fallback
+  if (shotAttempts.length === 0 && ballDetections && ballDetections.length > 0) {
+    console.log("[Shot Detection] No pose-based shots detected, generating from ball movement");
+    if (typeof self !== "undefined" && self.postMessage) {
+      self.postMessage({
+        type: "debug",
+        data: {
+          message: `⚠️ No pose-based shots detected, generating from ball movement`,
+        },
+      });
+    }
+    return generateFallbackShotAttempts(ballDetections);
+  }
+
   return shotAttempts;
 }
 
@@ -227,15 +276,14 @@ function analyzePoseForShot(
     const keypointConfidences = requiredKeypoints
       .map(
         (kp, i) =>
-          `${
-            [
-              "leftWrist",
-              "rightWrist",
-              "leftElbow",
-              "rightElbow",
-              "leftShoulder",
-              "rightShoulder",
-            ][i]
+          `${[
+            "leftWrist",
+            "rightWrist",
+            "leftElbow",
+            "rightElbow",
+            "leftShoulder",
+            "rightShoulder",
+          ][i]
           }: ${kp.confidence.toFixed(3)}`
       )
       .join(", ");
@@ -249,17 +297,17 @@ function analyzePoseForShot(
 
   // Much lower confidence threshold to capture more keypoints
   const visibleKeypoints = requiredKeypoints.filter(
-    (kp) => kp.confidence > 0.05 // Lowered from 0.1 to 0.05
+    (kp) => kp && kp.confidence > 0.01 // Further lowered to 0.01 for amateur videos
   );
 
   if (visibleKeypoints.length < 1) {
     // Lowered from 2 to 1 - be more permissive
-    // Debug: Log insufficient keypoints
-    if (typeof self !== "undefined" && self.postMessage) {
+    // Debug: Log insufficient keypoints (only occasionally to avoid spam)
+    if (Math.random() < 0.1 && typeof self !== "undefined" && self.postMessage) {
       self.postMessage({
         type: "debug",
         data: {
-          message: `⚠️ Insufficient keypoints for pose analysis: ${visibleKeypoints.length}/6 visible (threshold: 0.05)`,
+          message: `⚠️ Insufficient keypoints for pose analysis: ${visibleKeypoints.length}/6 visible (threshold: 0.01)`,
         },
       });
     }
@@ -302,9 +350,8 @@ function analyzePoseForShot(
       data: {
         message: `🔍 Pose analysis: confidence=${confidence.toFixed(
           3
-        )}, armElevation=${armElevation.toFixed(3)}, visibleKeypoints=${
-          visibleKeypoints.length
-        }/6`,
+        )}, armElevation=${armElevation.toFixed(3)}, visibleKeypoints=${visibleKeypoints.length
+          }/6`,
       },
     });
   }
@@ -434,7 +481,7 @@ function calculateShootingConfidence(
       Math.abs(rightWrist.confidence) +
       Math.abs(leftElbow.confidence) +
       Math.abs(rightElbow.confidence)) /
-      4
+    4
   );
   confidence += Math.min(avgConfidence, 0.5) * 0.4; // Cap keypoint contribution
 
@@ -473,7 +520,7 @@ function checkBallProximity(
 
       const distance = Math.sqrt(
         (ballCenter.x - shootingHand.x) ** 2 +
-          (ballCenter.y - shootingHand.y) ** 2
+        (ballCenter.y - shootingHand.y) ** 2
       );
 
       // Return proximity factor (closer = higher value)
@@ -494,10 +541,25 @@ function generateFallbackShotAttempts(ballDetections: any[]): ShotAttempt[] {
     self.postMessage({
       type: "debug",
       data: {
-        message: `🔧 Using fallback shot detection based on ball motion`,
+        message: `🔧 Analyzing ${ballDetections.length} frames for ball-based shot detection`,
       },
     });
+
+    // Debug: Check structure of first ball detection
+    if (ballDetections.length > 0) {
+      const firstFrame = ballDetections[0];
+      self.postMessage({
+        type: "debug",
+        data: {
+          message: `🔍 First ball frame: frameIndex=${firstFrame.frameIndex}, detections=${firstFrame.detections?.length || 0}`,
+        },
+      });
+    }
   }
+
+  let framesWithBall = 0;
+  let framesWithoutBall = 0;
+  let maxUpwardMotion = 0;
 
   // Look for ball motion patterns that suggest shot attempts
   for (let i = 1; i < ballDetections.length; i++) {
@@ -510,8 +572,11 @@ function generateFallbackShotAttempts(ballDetections: any[]): ShotAttempt[] {
       currentFrame.detections.length === 0 ||
       previousFrame.detections.length === 0
     ) {
+      framesWithoutBall++;
       continue;
     }
+
+    framesWithBall++;
 
     const currentBall = currentFrame.detections[0];
     const previousBall = previousFrame.detections[0];
@@ -521,15 +586,18 @@ function generateFallbackShotAttempts(ballDetections: any[]): ShotAttempt[] {
     const prevBallCenterY = previousBall.bbox[1] + previousBall.bbox[3] / 2;
     const upwardMotion = prevBallCenterY - ballCenterY; // Positive means ball moving up
 
-    // Check for significant upward motion
-    if (upwardMotion > 20) {
-      // Ball moved up by at least 20 pixels
+    if (upwardMotion > maxUpwardMotion) {
+      maxUpwardMotion = upwardMotion;
+    }
+
+    // Lowered threshold from 20 to 10 pixels for amateur videos
+    if (upwardMotion > 10) {
       const timestamp = currentFrame.timestamp || i * (1 / 30);
 
       shotAttempts.push({
         playerId: `fallback_player_${i}`,
         timestamp,
-        confidence: Math.min(0.6, upwardMotion / 50), // Scale confidence based on motion
+        confidence: Math.min(0.7, 0.5 + upwardMotion / 100), // Increased base confidence
         keypoints: {
           leftWrist: { x: 0, y: 0, confidence: 0.1 },
           rightWrist: { x: 0, y: 0, confidence: 0.1 },
@@ -542,6 +610,15 @@ function generateFallbackShotAttempts(ballDetections: any[]): ShotAttempt[] {
         shootingForm: "unknown",
       });
     }
+  }
+
+  if (typeof self !== "undefined" && self.postMessage) {
+    self.postMessage({
+      type: "debug",
+      data: {
+        message: `📊 Ball analysis: ${framesWithBall} frames with ball, ${framesWithoutBall} without. Max upward motion: ${maxUpwardMotion.toFixed(1)}px`,
+      },
+    });
   }
 
   if (typeof self !== "undefined" && self.postMessage) {
