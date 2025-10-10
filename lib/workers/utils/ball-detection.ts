@@ -26,9 +26,10 @@ export async function detectBall(
   const tracker = new BallTracker();
 
   console.log(`[Ball Detection] Starting detection on ${frames.length} frames`);
-  
-  const timePerFrame = videoDuration > 0 ? videoDuration / frames.length : 1 / samplingRate;
-  
+
+  const timePerFrame =
+    videoDuration > 0 ? videoDuration / frames.length : 1 / samplingRate;
+
   for (let i = 0; i < frames.length; i++) {
     const frame = frames[i];
     const timestamp = i * timePerFrame;
@@ -40,7 +41,9 @@ export async function detectBall(
 
     // Validate frame dimensions
     if (!frame || frame.width <= 0 || frame.height <= 0) {
-      console.warn(`Invalid frame dimensions at index ${i}, skipping ball detection`);
+      console.warn(
+        `Invalid frame dimensions at index ${i}, skipping ball detection`
+      );
       results.push({
         frameIndex: i,
         timestamp,
@@ -71,12 +74,12 @@ export async function detectBall(
           confidence: result.confidence,
           trajectory: tracker.lastPosition
             ? {
-              x: result.bbox[0] + result.bbox[2] / 2,
-              y: result.bbox[1] + result.bbox[3] / 2,
-              velocity: tracker.velocity
-                ? Math.sqrt(tracker.velocity.x ** 2 + tracker.velocity.y ** 2)
-                : 0,
-            }
+                x: result.bbox[0] + result.bbox[2] / 2,
+                y: result.bbox[1] + result.bbox[3] / 2,
+                velocity: tracker.velocity
+                  ? Math.sqrt(tracker.velocity.x ** 2 + tracker.velocity.y ** 2)
+                  : 0,
+              }
             : undefined,
         }));
       } catch (error) {
@@ -103,7 +106,13 @@ export async function detectBall(
     });
   }
 
-  console.log(`[Ball Detection] Completed detection on ${frames.length} frames, found ball in ${results.filter(r => r.detections.length > 0).length} frames`);
+  console.log(
+    `[Ball Detection] Completed detection on ${
+      frames.length
+    } frames, found ball in ${
+      results.filter((r) => r.detections.length > 0).length
+    } frames`
+  );
 
   return results;
 }
@@ -186,12 +195,12 @@ function detectBallInFrame(
           confidence,
           trajectory: tracker.lastPosition
             ? {
-              x: bbox[0] + bbox[2] / 2,
-              y: bbox[1] + bbox[3] / 2,
-              velocity: tracker.velocity
-                ? Math.sqrt(tracker.velocity.x ** 2 + tracker.velocity.y ** 2)
-                : 0,
-            }
+                x: bbox[0] + bbox[2] / 2,
+                y: bbox[1] + bbox[3] / 2,
+                velocity: tracker.velocity
+                  ? Math.sqrt(tracker.velocity.x ** 2 + tracker.velocity.y ** 2)
+                  : 0,
+              }
             : undefined,
         });
       }
@@ -378,7 +387,7 @@ function calculateBallConfidence(
 
     const distance = Math.sqrt(
       (currentCenter.x - expectedPosition.x) ** 2 +
-      (currentCenter.y - expectedPosition.y) ** 2
+        (currentCenter.y - expectedPosition.y) ** 2
     );
 
     const motionFactor = Math.max(0, 1 - distance / 50); // Within 50 pixels

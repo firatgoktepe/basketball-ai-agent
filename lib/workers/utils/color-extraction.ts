@@ -23,7 +23,9 @@ export function extractJerseyColors(
 
   // Limit processing to avoid hanging on large datasets
   const maxFramesToProcess = Math.min(detections.length, 30);
-  console.log(`📊 Processing first ${maxFramesToProcess} frames for color extraction`);
+  console.log(
+    `📊 Processing first ${maxFramesToProcess} frames for color extraction`
+  );
 
   for (let i = 0; i < maxFramesToProcess; i++) {
     const result = detections[i];
@@ -235,8 +237,8 @@ export function clusterColorsByKMeans(
       for (let i = 0; i < clusters.length; i++) {
         const distance = Math.sqrt(
           Math.pow(sample.r - clusters[i].centroid.r, 2) +
-          Math.pow(sample.g - clusters[i].centroid.g, 2) +
-          Math.pow(sample.b - clusters[i].centroid.b, 2)
+            Math.pow(sample.g - clusters[i].centroid.g, 2) +
+            Math.pow(sample.b - clusters[i].centroid.b, 2)
         );
 
         if (distance < minDistance) {
@@ -290,7 +292,8 @@ function assignTeamIds(
     console.log(
       `Cluster ${i}: RGB(${Math.round(r)}, ${Math.round(g)}, ${Math.round(
         b
-      )}) HSV(${h.toFixed(1)}, ${s.toFixed(2)}, ${v.toFixed(2)}) - ${cluster.samples.length
+      )}) HSV(${h.toFixed(1)}, ${s.toFixed(2)}, ${v.toFixed(2)}) - ${
+        cluster.samples.length
       } samples`
     );
 
@@ -308,8 +311,8 @@ function assignTeamIds(
     const cluster2 = clusters[1];
     const distance = Math.sqrt(
       Math.pow(cluster1.centroid.r - cluster2.centroid.r, 2) +
-      Math.pow(cluster1.centroid.g - cluster2.centroid.g, 2) +
-      Math.pow(cluster1.centroid.b - cluster2.centroid.b, 2)
+        Math.pow(cluster1.centroid.g - cluster2.centroid.g, 2) +
+        Math.pow(cluster1.centroid.b - cluster2.centroid.b, 2)
     );
 
     console.log(`📏 Color distance between clusters: ${distance.toFixed(1)}`);

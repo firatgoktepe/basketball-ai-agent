@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import {
   Play,
   Pause,
@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import type { GameData, VideoFile, GameEvent } from "@/types";
+import { usePlayerFilter } from "./PlayerFilterContext";
 
 interface HighlightsProps {
   gameData: GameData;
@@ -34,6 +35,7 @@ export function Highlights({
   videoFile,
   onSeekToTime,
 }: HighlightsProps) {
+  const { selectedPlayer, clearFilter } = usePlayerFilter();
   const [selectedHighlight, setSelectedHighlight] =
     useState<HighlightVideo | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -43,7 +45,7 @@ export function Highlights({
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Create highlight videos from timeline events or use pre-extracted highlights
-  const highlightVideos: HighlightVideo[] = (() => {
+  const allHighlightVideos: HighlightVideo[] = (() => {
     // If highlights are pre-extracted, use them
     if (gameData.highlights && gameData.highlights.length > 0) {
       console.log(
@@ -185,6 +187,18 @@ export function Highlights({
     );
     return created;
   })();
+
+  // Filter highlights by selected player
+  const highlightVideos = useMemo(() => {
+    if (selectedPlayer.playerId && selectedPlayer.teamId) {
+      return allHighlightVideos.filter(
+        (h) =>
+          h.event.playerId === selectedPlayer.playerId &&
+          h.event.teamId === selectedPlayer.teamId
+      );
+    }
+    return allHighlightVideos;
+  }, [allHighlightVideos, selectedPlayer]);
 
   const totalHighlights = highlightVideos.length;
 
@@ -401,6 +415,30 @@ export function Highlights({
     <div className="space-y-6">
       {/* Hidden canvas for thumbnail generation */}
       <canvas ref={canvasRef} className="hidden" />
+
+      {/* Player Filter Indicator */}
+      {selectedPlayer.playerId && (
+        <div className="bg-primary/10 border border-primary/30 rounded-lg p-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Target className="w-4 h-4 text-primary" />
+            <span className="font-medium">
+              Filtered by Player #{selectedPlayer.playerId} (
+              {
+                gameData.teams.find((t) => t.id === selectedPlayer.teamId)
+                  ?.label
+              }
+              )
+            </span>
+          </div>
+          <button
+            onClick={clearFilter}
+            className="text-primary hover:text-primary/80 transition-colors flex items-center gap-1 text-sm"
+          >
+            <X className="w-4 h-4" />
+            Clear Filter
+          </button>
+        </div>
+      )}
 
       {/* Header */}
       <div className="text-center">

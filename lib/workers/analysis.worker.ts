@@ -19,7 +19,11 @@ import {
   loadONNXBallDetector,
   isONNXAvailable,
 } from "./models/onnx-ball-detection";
-import { detectPersons, clusterTeams, assignTeamsToDetections } from "./utils/person-detection";
+import {
+  detectPersons,
+  clusterTeams,
+  assignTeamsToDetections,
+} from "./utils/person-detection";
 import { detectBall } from "./utils/ball-detection";
 import { extractPoses, detectShotAttempts } from "./utils/pose-estimation";
 import { runOCR } from "./utils/ocr";
@@ -46,13 +50,13 @@ async function initializeModels(forceMockPoseModel = false) {
     // Load core models
     const moveNetConfig = forceMockPoseModel
       ? {
-        modelType: "SinglePose.Lightning" as const,
-        forceMock: true,
-      }
+          modelType: "SinglePose.Lightning" as const,
+          forceMock: true,
+        }
       : {
-        modelType: "SinglePose.Lightning" as const,
-        forceMock: false,
-      };
+          modelType: "SinglePose.Lightning" as const,
+          forceMock: false,
+        };
 
     const [coco, moveNet] = await Promise.all([
       loadCocoSSD(),
@@ -106,10 +110,16 @@ async function analyzeVideo(options: any) {
     const frames = receivedFrames.map((frameData: any, index: number) => {
       try {
         const uint8Array = new Uint8ClampedArray(frameData.data);
-        const imageData = new ImageData(uint8Array, frameData.width, frameData.height);
+        const imageData = new ImageData(
+          uint8Array,
+          frameData.width,
+          frameData.height
+        );
 
         if (index === 0) {
-          console.log(`[Worker] First frame reconstructed: ${imageData.width}x${imageData.height}, data length: ${imageData.data.length}`);
+          console.log(
+            `[Worker] First frame reconstructed: ${imageData.width}x${imageData.height}, data length: ${imageData.data.length}`
+          );
         }
 
         return imageData;
@@ -120,11 +130,17 @@ async function analyzeVideo(options: any) {
       }
     });
 
-    console.log(`[Worker] Reconstructed ${frames.length} ImageData frames from transferred buffers`);
+    console.log(
+      `[Worker] Reconstructed ${frames.length} ImageData frames from transferred buffers`
+    );
 
     // Validate frames
-    const validFrames = frames.filter((f: ImageData) => f && f.data && f.data.length > 0);
-    console.log(`[Worker] Valid frames with data: ${validFrames.length}/${frames.length}`);
+    const validFrames = frames.filter(
+      (f: ImageData) => f && f.data && f.data.length > 0
+    );
+    console.log(
+      `[Worker] Valid frames with data: ${validFrames.length}/${frames.length}`
+    );
 
     // Initialize models
     console.log("Initializing models...");
@@ -133,15 +149,21 @@ async function analyzeVideo(options: any) {
 
     // Debug: Check frame dimensions
     if (frames.length > 0) {
-      console.log(`First frame dimensions: ${frames[0].width}x${frames[0].height}`);
-      const validFrames = frames.filter((f: ImageData) => f && f.width > 0 && f.height > 0);
+      console.log(
+        `First frame dimensions: ${frames[0].width}x${frames[0].height}`
+      );
+      const validFrames = frames.filter(
+        (f: ImageData) => f && f.width > 0 && f.height > 0
+      );
       console.log(`Valid frames: ${validFrames.length}/${frames.length}`);
 
       if (validFrames.length === 0) {
         console.error("❌ ALL FRAMES ARE INVALID - Frame extraction failed!");
         self.postMessage({
           type: "debug",
-          data: { message: "❌ ALL FRAMES ARE INVALID - Frame extraction failed!" },
+          data: {
+            message: "❌ ALL FRAMES ARE INVALID - Frame extraction failed!",
+          },
         });
       }
     }
@@ -161,18 +183,30 @@ async function analyzeVideo(options: any) {
       data: { message: "🔍 Running person detection..." },
     });
 
-    let personDetections = await detectPersons(frames, cocoModel, samplingRate, videoFile.duration);
+    let personDetections = await detectPersons(
+      frames,
+      cocoModel,
+      samplingRate,
+      videoFile.duration
+    );
     console.log(`Detected persons in ${personDetections.length} frames`);
 
     // Debug: Check timestamp calculation
     if (personDetections.length > 0) {
       const firstTimestamp = personDetections[0].timestamp;
-      const lastTimestamp = personDetections[personDetections.length - 1].timestamp;
-      console.log(`Person detection timestamps: ${firstTimestamp.toFixed(2)}s to ${lastTimestamp.toFixed(2)}s`);
+      const lastTimestamp =
+        personDetections[personDetections.length - 1].timestamp;
+      console.log(
+        `Person detection timestamps: ${firstTimestamp.toFixed(
+          2
+        )}s to ${lastTimestamp.toFixed(2)}s`
+      );
       self.postMessage({
         type: "debug",
         data: {
-          message: `📊 Person detections span ${firstTimestamp.toFixed(1)}s - ${lastTimestamp.toFixed(1)}s`,
+          message: `📊 Person detections span ${firstTimestamp.toFixed(
+            1
+          )}s - ${lastTimestamp.toFixed(1)}s`,
         },
       });
     }
@@ -216,7 +250,10 @@ async function analyzeVideo(options: any) {
     // Add timeout to prevent hanging
     const clusteringPromise = clusterTeams(personDetections, frames);
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Team clustering timeout after 30s")), 30000)
+      setTimeout(
+        () => reject(new Error("Team clustering timeout after 30s")),
+        30000
+      )
     );
 
     let teamClusters: Array<{
@@ -225,7 +262,10 @@ async function analyzeVideo(options: any) {
       teamId: string;
     }>;
     try {
-      teamClusters = await Promise.race([clusteringPromise, timeoutPromise]) as Array<{
+      teamClusters = (await Promise.race([
+        clusteringPromise,
+        timeoutPromise,
+      ])) as Array<{
         centroid: { r: number; g: number; b: number };
         samples: any[];
         teamId: string;
@@ -233,7 +273,11 @@ async function analyzeVideo(options: any) {
       console.log("Team clusters:", teamClusters);
       self.postMessage({
         type: "debug",
-        data: { message: `✅ Team clustering complete: ${teamClusters?.length || 0} teams` },
+        data: {
+          message: `✅ Team clustering complete: ${
+            teamClusters?.length || 0
+          } teams`,
+        },
       });
     } catch (error) {
       console.error("Team clustering failed or timed out:", error);
@@ -262,16 +306,29 @@ async function analyzeVideo(options: any) {
 
     // Apply team assignments to person detections
     console.log("Assigning teams to person detections...");
-    personDetections = assignTeamsToDetections(personDetections, frames, teamClusters);
+    personDetections = assignTeamsToDetections(
+      personDetections,
+      frames,
+      teamClusters
+    );
 
     const detectionsWithTeams = personDetections.reduce((count, frame) => {
-      return count + (frame.detections || []).filter((d: any) => d.teamId && d.teamId !== "unknown").length;
+      return (
+        count +
+        (frame.detections || []).filter(
+          (d: any) => d.teamId && d.teamId !== "unknown"
+        ).length
+      );
     }, 0);
 
-    console.log(`Team assignment complete: ${detectionsWithTeams} detections have team IDs`);
+    console.log(
+      `Team assignment complete: ${detectionsWithTeams} detections have team IDs`
+    );
     self.postMessage({
       type: "debug",
-      data: { message: `✅ Assigned teams to ${detectionsWithTeams} player detections` },
+      data: {
+        message: `✅ Assigned teams to ${detectionsWithTeams} player detections`,
+      },
     });
 
     // Step 3: Ball detection (if enabled)
@@ -293,23 +350,40 @@ async function analyzeVideo(options: any) {
       });
 
       try {
-        const ballDetectionPromise = detectBall(frames, onnxBallDetector, samplingRate, videoFile.duration);
+        const ballDetectionPromise = detectBall(
+          frames,
+          onnxBallDetector,
+          samplingRate,
+          videoFile.duration
+        );
         const ballTimeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("Ball detection timeout after 30s")), 30000)
+          setTimeout(
+            () => reject(new Error("Ball detection timeout after 30s")),
+            30000
+          )
         );
 
-        ballDetections = await Promise.race([ballDetectionPromise, ballTimeoutPromise]) as any[];
+        ballDetections = (await Promise.race([
+          ballDetectionPromise,
+          ballTimeoutPromise,
+        ])) as any[];
 
-        console.log(`Ball detection complete: ${ballDetections.length} frames processed`);
+        console.log(
+          `Ball detection complete: ${ballDetections.length} frames processed`
+        );
         self.postMessage({
           type: "debug",
-          data: { message: `✅ Ball detection complete: ${ballDetections.length} frames` },
+          data: {
+            message: `✅ Ball detection complete: ${ballDetections.length} frames`,
+          },
         });
       } catch (error) {
         console.error("Ball detection failed or timed out:", error);
         self.postMessage({
           type: "debug",
-          data: { message: `⚠️ Ball detection failed, continuing without ball data` },
+          data: {
+            message: `⚠️ Ball detection failed, continuing without ball data`,
+          },
         });
         ballDetections = [];
       }
@@ -348,15 +422,28 @@ async function analyzeVideo(options: any) {
         });
       }
 
-      poseDetections = await extractPoses(frames, moveNetModel, samplingRate, videoFile.duration);
+      poseDetections = await extractPoses(
+        frames,
+        moveNetModel,
+        samplingRate,
+        videoFile.duration
+      );
 
-      console.log(`Pose detection complete: ${poseDetections.length} frames processed`);
-      const posesWithData = poseDetections.filter(p => p.poses && p.poses.length > 0);
-      console.log(`Poses with detections: ${posesWithData.length}/${poseDetections.length}`);
+      console.log(
+        `Pose detection complete: ${poseDetections.length} frames processed`
+      );
+      const posesWithData = poseDetections.filter(
+        (p) => p.poses && p.poses.length > 0
+      );
+      console.log(
+        `Poses with detections: ${posesWithData.length}/${poseDetections.length}`
+      );
 
       self.postMessage({
         type: "debug",
-        data: { message: `📊 Pose detection: ${posesWithData.length}/${poseDetections.length} frames have poses` },
+        data: {
+          message: `📊 Pose detection: ${posesWithData.length}/${poseDetections.length} frames have poses`,
+        },
       });
 
       // Detect shot attempts from poses
@@ -482,7 +569,8 @@ async function analyzeVideo(options: any) {
       self.postMessage({
         type: "debug",
         data: {
-          message: "⚠️ No OCR results from scoreboard crop (expected for amateur videos)",
+          message:
+            "⚠️ No OCR results from scoreboard crop (expected for amateur videos)",
         },
       });
     }
@@ -491,7 +579,8 @@ async function analyzeVideo(options: any) {
       self.postMessage({
         type: "debug",
         data: {
-          message: "⚠️ No shot attempts detected - will rely on ball movement and visual scoring",
+          message:
+            "⚠️ No shot attempts detected - will rely on ball movement and visual scoring",
         },
       });
     }

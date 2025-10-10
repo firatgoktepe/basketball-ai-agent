@@ -31,8 +31,16 @@ export function detectHoopRegion(
   timestamp: number
 ): HoopDetectionResult {
   // Validate imageData
-  if (!imageData || !imageData.width || !imageData.height || imageData.width <= 0 || imageData.height <= 0) {
-    console.warn(`Invalid imageData at frame ${frameIndex}, skipping hoop detection`);
+  if (
+    !imageData ||
+    !imageData.width ||
+    !imageData.height ||
+    imageData.width <= 0 ||
+    imageData.height <= 0
+  ) {
+    console.warn(
+      `Invalid imageData at frame ${frameIndex}, skipping hoop detection`
+    );
     return {
       frameIndex,
       timestamp,
@@ -297,7 +305,9 @@ export function detectVisualScores(
     }
   }
 
-  console.log(`[Visual Scoring] Ball detections: ${ballFramesWithDetections}/${ballDetections.length} frames have ball`);
+  console.log(
+    `[Visual Scoring] Ball detections: ${ballFramesWithDetections}/${ballDetections.length} frames have ball`
+  );
 
   if (typeof self !== "undefined" && self.postMessage) {
     self.postMessage({
@@ -320,7 +330,9 @@ export function detectVisualScores(
     );
   } else {
     // Fallback: No ball data, estimate scores based on shot attempts
-    console.log(`[Visual Scoring] No ball data, estimating scores from ${shotAttempts.length} shot attempts`);
+    console.log(
+      `[Visual Scoring] No ball data, estimating scores from ${shotAttempts.length} shot attempts`
+    );
 
     if (typeof self !== "undefined" && self.postMessage) {
       self.postMessage({
@@ -374,7 +386,9 @@ export function detectVisualScores(
  * Estimate scores from shot attempts when ball tracking is unavailable
  * Uses typical basketball shooting percentages
  */
-function estimateScoresFromShotAttempts(shotAttempts: GameEvent[]): VisualScoreEvent[] {
+function estimateScoresFromShotAttempts(
+  shotAttempts: GameEvent[]
+): VisualScoreEvent[] {
   const scores: VisualScoreEvent[] = [];
 
   // Typical amateur basketball field goal percentage: ~35-45%
@@ -397,7 +411,11 @@ function estimateScoresFromShotAttempts(shotAttempts: GameEvent[]): VisualScoreE
     }
   }
 
-  console.log(`[Score Estimation] Estimated ${scores.length} scores from ${shotAttempts.length} shots (${(scoreRate * 100).toFixed(0)}% success rate)`);
+  console.log(
+    `[Score Estimation] Estimated ${scores.length} scores from ${
+      shotAttempts.length
+    } shots (${(scoreRate * 100).toFixed(0)}% success rate)`
+  );
 
   return scores;
 }

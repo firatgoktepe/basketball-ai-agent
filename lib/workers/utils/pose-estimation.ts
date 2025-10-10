@@ -36,7 +36,8 @@ export async function extractPoses(
     });
   }
 
-  const timePerFrame = videoDuration > 0 ? videoDuration / frames.length : 1 / samplingRate;
+  const timePerFrame =
+    videoDuration > 0 ? videoDuration / frames.length : 1 / samplingRate;
 
   for (let i = 0; i < frames.length; i++) {
     const frame = frames[i];
@@ -50,7 +51,9 @@ export async function extractPoses(
     try {
       // Validate frame dimensions
       if (!frame || frame.width <= 0 || frame.height <= 0) {
-        console.warn(`Invalid frame dimensions at index ${i}, skipping pose estimation`);
+        console.warn(
+          `Invalid frame dimensions at index ${i}, skipping pose estimation`
+        );
         results.push({
           frameIndex: i,
           timestamp,
@@ -61,7 +64,9 @@ export async function extractPoses(
 
       // Validate frame data
       if (!frame.data || frame.data.length === 0) {
-        console.warn(`Invalid frame data at index ${i}, skipping pose estimation`);
+        console.warn(
+          `Invalid frame data at index ${i}, skipping pose estimation`
+        );
         results.push({
           frameIndex: i,
           timestamp,
@@ -140,8 +145,9 @@ export function detectShotAttempts(
     self.postMessage({
       type: "debug",
       data: {
-        message: `🔍 Starting shot detection: ${poseResults.length
-          } pose frames, ${ballDetections?.length || 0} ball detections`,
+        message: `🔍 Starting shot detection: ${
+          poseResults.length
+        } pose frames, ${ballDetections?.length || 0} ball detections`,
       },
     });
   }
@@ -207,8 +213,14 @@ export function detectShotAttempts(
   }
 
   // If we still have no shot attempts and we have ball detections, use ball movement as fallback
-  if (shotAttempts.length === 0 && ballDetections && ballDetections.length > 0) {
-    console.log("[Shot Detection] No pose-based shots detected, generating from ball movement");
+  if (
+    shotAttempts.length === 0 &&
+    ballDetections &&
+    ballDetections.length > 0
+  ) {
+    console.log(
+      "[Shot Detection] No pose-based shots detected, generating from ball movement"
+    );
     if (typeof self !== "undefined" && self.postMessage) {
       self.postMessage({
         type: "debug",
@@ -276,14 +288,15 @@ function analyzePoseForShot(
     const keypointConfidences = requiredKeypoints
       .map(
         (kp, i) =>
-          `${[
-            "leftWrist",
-            "rightWrist",
-            "leftElbow",
-            "rightElbow",
-            "leftShoulder",
-            "rightShoulder",
-          ][i]
+          `${
+            [
+              "leftWrist",
+              "rightWrist",
+              "leftElbow",
+              "rightElbow",
+              "leftShoulder",
+              "rightShoulder",
+            ][i]
           }: ${kp.confidence.toFixed(3)}`
       )
       .join(", ");
@@ -303,7 +316,11 @@ function analyzePoseForShot(
   if (visibleKeypoints.length < 1) {
     // Lowered from 2 to 1 - be more permissive
     // Debug: Log insufficient keypoints (only occasionally to avoid spam)
-    if (Math.random() < 0.1 && typeof self !== "undefined" && self.postMessage) {
+    if (
+      Math.random() < 0.1 &&
+      typeof self !== "undefined" &&
+      self.postMessage
+    ) {
       self.postMessage({
         type: "debug",
         data: {
@@ -350,8 +367,9 @@ function analyzePoseForShot(
       data: {
         message: `🔍 Pose analysis: confidence=${confidence.toFixed(
           3
-        )}, armElevation=${armElevation.toFixed(3)}, visibleKeypoints=${visibleKeypoints.length
-          }/6`,
+        )}, armElevation=${armElevation.toFixed(3)}, visibleKeypoints=${
+          visibleKeypoints.length
+        }/6`,
       },
     });
   }
@@ -481,7 +499,7 @@ function calculateShootingConfidence(
       Math.abs(rightWrist.confidence) +
       Math.abs(leftElbow.confidence) +
       Math.abs(rightElbow.confidence)) /
-    4
+      4
   );
   confidence += Math.min(avgConfidence, 0.5) * 0.4; // Cap keypoint contribution
 
@@ -520,7 +538,7 @@ function checkBallProximity(
 
       const distance = Math.sqrt(
         (ballCenter.x - shootingHand.x) ** 2 +
-        (ballCenter.y - shootingHand.y) ** 2
+          (ballCenter.y - shootingHand.y) ** 2
       );
 
       // Return proximity factor (closer = higher value)
@@ -551,7 +569,9 @@ function generateFallbackShotAttempts(ballDetections: any[]): ShotAttempt[] {
       self.postMessage({
         type: "debug",
         data: {
-          message: `🔍 First ball frame: frameIndex=${firstFrame.frameIndex}, detections=${firstFrame.detections?.length || 0}`,
+          message: `🔍 First ball frame: frameIndex=${
+            firstFrame.frameIndex
+          }, detections=${firstFrame.detections?.length || 0}`,
         },
       });
     }
@@ -616,7 +636,9 @@ function generateFallbackShotAttempts(ballDetections: any[]): ShotAttempt[] {
     self.postMessage({
       type: "debug",
       data: {
-        message: `📊 Ball analysis: ${framesWithBall} frames with ball, ${framesWithoutBall} without. Max upward motion: ${maxUpwardMotion.toFixed(1)}px`,
+        message: `📊 Ball analysis: ${framesWithBall} frames with ball, ${framesWithoutBall} without. Max upward motion: ${maxUpwardMotion.toFixed(
+          1
+        )}px`,
       },
     });
   }

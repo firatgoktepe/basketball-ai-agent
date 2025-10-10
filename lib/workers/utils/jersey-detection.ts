@@ -74,7 +74,12 @@ export class JerseyNumberDetector {
     const cropHeight = Math.max(1, endY - startY); // Ensure at least 1px
 
     // Validate dimensions before creating ImageData
-    if (!isFinite(cropWidth) || !isFinite(cropHeight) || cropWidth <= 0 || cropHeight <= 0) {
+    if (
+      !isFinite(cropWidth) ||
+      !isFinite(cropHeight) ||
+      cropWidth <= 0 ||
+      cropHeight <= 0
+    ) {
       console.warn("Invalid jersey crop dimensions, returning 1x1 placeholder");
       return new ImageData(1, 1);
     }
@@ -104,7 +109,9 @@ export class JerseyNumberDetector {
   private preprocessJerseyImage(imageData: ImageData): ImageData {
     // Validate input dimensions
     if (!imageData || imageData.width <= 0 || imageData.height <= 0) {
-      console.warn("Invalid imageData for preprocessing, returning 1x1 placeholder");
+      console.warn(
+        "Invalid imageData for preprocessing, returning 1x1 placeholder"
+      );
       return new ImageData(1, 1);
     }
 
@@ -262,14 +269,14 @@ export class JerseyNumberDetector {
           visualFeatures.avgColor[0] - track.visualFeatures.avgColor[0],
           2
         ) +
-        Math.pow(
-          visualFeatures.avgColor[1] - track.visualFeatures.avgColor[1],
-          2
-        ) +
-        Math.pow(
-          visualFeatures.avgColor[2] - track.visualFeatures.avgColor[2],
-          2
-        )
+          Math.pow(
+            visualFeatures.avgColor[1] - track.visualFeatures.avgColor[1],
+            2
+          ) +
+          Math.pow(
+            visualFeatures.avgColor[2] - track.visualFeatures.avgColor[2],
+            2
+          )
       );
 
       const heightDiff = Math.abs(
@@ -430,7 +437,9 @@ export async function processJerseyDetections(
 
       // Validate imageData exists and has valid dimensions
       if (!imageData || imageData.width <= 0 || imageData.height <= 0) {
-        console.warn(`Invalid imageData at frame ${frame.frameIndex}, skipping jersey detection`);
+        console.warn(
+          `Invalid imageData at frame ${frame.frameIndex}, skipping jersey detection`
+        );
         continue;
       }
 

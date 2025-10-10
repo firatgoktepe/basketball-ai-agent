@@ -64,7 +64,9 @@ function cropImageData(
 
   // Validate dimensions
   if (!isFinite(width) || !isFinite(height) || width <= 0 || height <= 0) {
-    console.warn("Invalid crop region dimensions in ocr.ts, returning 1x1 placeholder");
+    console.warn(
+      "Invalid crop region dimensions in ocr.ts, returning 1x1 placeholder"
+    );
     return new ImageData(1, 1);
   }
 

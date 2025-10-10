@@ -79,13 +79,19 @@ export function extractHighlights(
 
     // Skip highlights with zero or negative duration
     if (duration <= 0) {
-      console.warn(`❌ Skipping highlight with invalid duration: ${duration}s for event ${event.id}`);
+      console.warn(
+        `❌ Skipping highlight with invalid duration: ${duration}s for event ${event.id}`
+      );
       continue;
     }
 
     // Skip highlights that are too short (minimum 5 seconds)
     if (duration < 5.0) {
-      console.warn(`❌ Skipping highlight with too short duration: ${duration.toFixed(2)}s (minimum: 5.0s) for event ${event.id}`);
+      console.warn(
+        `❌ Skipping highlight with too short duration: ${duration.toFixed(
+          2
+        )}s (minimum: 5.0s) for event ${event.id}`
+      );
       continue;
     }
 
@@ -102,7 +108,9 @@ export function extractHighlights(
     });
   }
 
-  console.log(`✅ Extracted ${highlights.length} valid highlights from ${events.length} events`);
+  console.log(
+    `✅ Extracted ${highlights.length} valid highlights from ${events.length} events`
+  );
   return highlights;
 }
 

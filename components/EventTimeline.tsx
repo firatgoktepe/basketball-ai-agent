@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import {
   Play,
   Pause,
@@ -11,8 +11,10 @@ import {
   Clock,
   SkipBack,
   SkipForward,
+  X,
 } from "lucide-react";
 import type { GameData, VideoFile } from "@/types";
+import { usePlayerFilter } from "./PlayerFilterContext";
 
 interface EventTimelineProps {
   gameData: GameData;
@@ -25,6 +27,7 @@ export function EventTimeline({
   videoFile,
   onSeekToTime,
 }: EventTimelineProps) {
+  const { selectedPlayer, clearFilter } = usePlayerFilter();
   const [selectedEvent, setSelectedEvent] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -147,9 +150,22 @@ export function EventTimeline({
     };
   }, []);
 
-  const sortedEvents = [...gameData.events].sort(
-    (a, b) => a.timestamp - b.timestamp
-  );
+  // Filter events by player if a player is selected
+  const filteredEvents = useMemo(() => {
+    let events = [...gameData.events];
+
+    if (selectedPlayer.playerId && selectedPlayer.teamId) {
+      events = events.filter(
+        (e) =>
+          e.playerId === selectedPlayer.playerId &&
+          e.teamId === selectedPlayer.teamId
+      );
+    }
+
+    return events;
+  }, [gameData.events, selectedPlayer]);
+
+  const sortedEvents = filteredEvents.sort((a, b) => a.timestamp - b.timestamp);
 
   return (
     <div className="space-y-6">
@@ -237,6 +253,30 @@ export function EventTimeline({
           </div>
         </div>
       </div>
+
+      {/* Player Filter Indicator */}
+      {selectedPlayer.playerId && (
+        <div className="bg-primary/10 border border-primary/30 rounded-lg p-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Target className="w-4 h-4 text-primary" />
+            <span className="font-medium">
+              Filtered by Player #{selectedPlayer.playerId} (
+              {
+                gameData.teams.find((t) => t.id === selectedPlayer.teamId)
+                  ?.label
+              }
+              )
+            </span>
+          </div>
+          <button
+            onClick={clearFilter}
+            className="text-primary hover:text-primary/80 transition-colors flex items-center gap-1 text-sm"
+          >
+            <X className="w-4 h-4" />
+            Clear Filter
+          </button>
+        </div>
+      )}
 
       {/* Visual Timeline */}
       <div className="bg-card border rounded-lg p-4">

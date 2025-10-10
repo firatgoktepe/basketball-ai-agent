@@ -49,7 +49,9 @@ export class AnalysisWorker {
         console.log(`[Main Thread] Extracted ${frames.length} frames`);
 
         if (frames.length > 0) {
-          console.log(`[Main Thread] First frame: ${frames[0].width}x${frames[0].height}`);
+          console.log(
+            `[Main Thread] First frame: ${frames[0].width}x${frames[0].height}`
+          );
         } else {
           console.error("[Main Thread] No frames extracted!");
         }
@@ -102,7 +104,9 @@ export class AnalysisWorker {
           transferList // Transfer ownership instead of cloning
         );
 
-        console.log(`[Main Thread] Transferred ${transferList.length} frame buffers to worker`);
+        console.log(
+          `[Main Thread] Transferred ${transferList.length} frame buffers to worker`
+        );
       } catch (error) {
         reject(error);
       }

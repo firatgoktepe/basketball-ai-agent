@@ -17,6 +17,7 @@ import {
   ConfidenceIndicator,
 } from "@/components/ui/ConfidenceBadge";
 import type { GameData, GameEvent } from "@/types";
+import { usePlayerFilter } from "./PlayerFilterContext";
 
 interface EventListProps {
   gameData: GameData;
@@ -29,6 +30,7 @@ export function EventList({
   onEventUpdate,
   onEventDelete,
 }: EventListProps) {
+  const { selectedPlayer, clearFilter } = usePlayerFilter();
   const [editingEvent, setEditingEvent] = useState<string | null>(null);
   const [filter, setFilter] = useState<
     "all" | "high_confidence" | "low_confidence" | "2pt_scores" | "3pt_scores"
@@ -104,6 +106,17 @@ export function EventList({
   };
 
   const filteredEvents = gameData.events.filter((event) => {
+    // Apply player filter first
+    if (selectedPlayer.playerId && selectedPlayer.teamId) {
+      if (
+        event.playerId !== selectedPlayer.playerId ||
+        event.teamId !== selectedPlayer.teamId
+      ) {
+        return false;
+      }
+    }
+
+    // Then apply confidence/type filters
     if (filter === "high_confidence") return event.confidence >= 0.5;
     if (filter === "low_confidence") return event.confidence < 0.5;
     if (filter === "2pt_scores")
@@ -181,6 +194,30 @@ export function EventList({
 
   return (
     <div className="space-y-6">
+      {/* Player Filter Indicator */}
+      {selectedPlayer.playerId && (
+        <div className="bg-primary/10 border border-primary/30 rounded-lg p-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Target className="w-4 h-4 text-primary" />
+            <span className="font-medium">
+              Filtered by Player #{selectedPlayer.playerId} (
+              {
+                gameData.teams.find((t) => t.id === selectedPlayer.teamId)
+                  ?.label
+              }
+              )
+            </span>
+          </div>
+          <button
+            onClick={clearFilter}
+            className="text-primary hover:text-primary/80 transition-colors flex items-center gap-1 text-sm"
+          >
+            <X className="w-4 h-4" />
+            Clear Filter
+          </button>
+        </div>
+      )}
+
       {/* Filters and Controls */}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="flex gap-2">

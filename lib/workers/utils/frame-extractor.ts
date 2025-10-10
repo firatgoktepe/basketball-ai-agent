@@ -48,8 +48,15 @@ export async function extractFrames(
                 const width = video.videoWidth || 800;
                 const height = video.videoHeight || 600;
 
-                if (width <= 0 || height <= 0 || !isFinite(width) || !isFinite(height)) {
-                  console.warn(`Invalid video dimensions at frame ${currentFrame}: ${width}x${height}, using defaults`);
+                if (
+                  width <= 0 ||
+                  height <= 0 ||
+                  !isFinite(width) ||
+                  !isFinite(height)
+                ) {
+                  console.warn(
+                    `Invalid video dimensions at frame ${currentFrame}: ${width}x${height}, using defaults`
+                  );
                   frames.push(new ImageData(800, 600));
                   currentFrame++;
                   setTimeout(captureFrame, 0);

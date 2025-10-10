@@ -21,7 +21,8 @@ export async function detectPersons(
   }
 
   // Calculate correct timestamp based on sampling rate and video duration
-  const timePerFrame = videoDuration > 0 ? videoDuration / frames.length : 1 / samplingRate;
+  const timePerFrame =
+    videoDuration > 0 ? videoDuration / frames.length : 1 / samplingRate;
 
   for (let i = 0; i < frames.length; i++) {
     const frame = frames[i];
@@ -63,7 +64,9 @@ async function detectPersonsInFrame(
   try {
     // Validate frame dimensions
     if (!frame || frame.width <= 0 || frame.height <= 0) {
-      console.warn("Invalid frame dimensions in detectPersonsInFrame, returning empty detections");
+      console.warn(
+        "Invalid frame dimensions in detectPersonsInFrame, returning empty detections"
+      );
       return [];
     }
 
@@ -141,7 +144,8 @@ function detectPersonsFallback(
   // Fallback detection using simple heuristics
   const results: DetectionResult[] = [];
 
-  const timePerFrame = videoDuration > 0 ? videoDuration / frames.length : 1 / samplingRate;
+  const timePerFrame =
+    videoDuration > 0 ? videoDuration / frames.length : 1 / samplingRate;
 
   for (let i = 0; i < frames.length; i++) {
     const frame = frames[i];
@@ -286,8 +290,8 @@ function performKMeansClustering(
     for (let i = 0; i < clusters.length; i++) {
       const distance = Math.sqrt(
         Math.pow(sample.r - clusters[i].centroid.r, 2) +
-        Math.pow(sample.g - clusters[i].centroid.g, 2) +
-        Math.pow(sample.b - clusters[i].centroid.b, 2)
+          Math.pow(sample.g - clusters[i].centroid.g, 2) +
+          Math.pow(sample.b - clusters[i].centroid.b, 2)
       );
 
       if (distance < minDistance) {
@@ -336,7 +340,9 @@ export function assignTeamsToDetections(
     teamId: string;
   }>
 ): DetectionResult[] {
-  console.log(`Assigning teams to ${detections.length} detection frames using ${teamClusters.length} clusters`);
+  console.log(
+    `Assigning teams to ${detections.length} detection frames using ${teamClusters.length} clusters`
+  );
 
   if (!teamClusters || teamClusters.length === 0) {
     console.warn("No team clusters available, cannot assign teams");
@@ -360,7 +366,12 @@ export function assignTeamsToDetections(
       const centerX = Math.floor(x + width / 2);
       const centerY = Math.floor(y + height * 0.3);
 
-      if (centerX < 0 || centerX >= frame.width || centerY < 0 || centerY >= frame.height) {
+      if (
+        centerX < 0 ||
+        centerX >= frame.width ||
+        centerY < 0 ||
+        centerY >= frame.height
+      ) {
         continue;
       }
 
@@ -378,8 +389,8 @@ export function assignTeamsToDetections(
       for (const cluster of teamClusters) {
         const distance = Math.sqrt(
           Math.pow(r - cluster.centroid.r, 2) +
-          Math.pow(g - cluster.centroid.g, 2) +
-          Math.pow(b - cluster.centroid.b, 2)
+            Math.pow(g - cluster.centroid.g, 2) +
+            Math.pow(b - cluster.centroid.b, 2)
         );
 
         if (distance < minDistance) {
