@@ -65,16 +65,29 @@ async function initializeModels(forceMockPoseModel = false) {
     cocoModel = coco;
     moveNetModel = moveNet;
 
-    // Try to load ONNX ball detector if available
+    // Try to load ONNX ball detector if available AND model file exists
+    // Note: The model file /models/ball-detection.onnx must be manually added
+    // For now, we skip ONNX and use HSV-based ball detection (works well for basketball)
     if (isONNXAvailable()) {
       try {
-        onnxBallDetector = await loadONNXBallDetector();
-        console.log("ONNX ball detector loaded successfully");
+        // Check if model exists by attempting to fetch it first
+        const modelCheck = await fetch("/models/ball-detection.onnx", {
+          method: "HEAD",
+        });
+
+        if (modelCheck.ok) {
+          onnxBallDetector = await loadONNXBallDetector();
+          console.log("✅ ONNX ball detector loaded successfully");
+        } else {
+          console.log(
+            "ℹ️ ONNX ball model not found - using HSV ball detection (recommended for basketball)"
+          );
+        }
       } catch (error) {
-        console.warn(
-          "ONNX ball detector failed to load, using HSV fallback:",
-          error
+        console.log(
+          "ℹ️ ONNX ball detector not available - using HSV fallback (works well for basketball)"
         );
+        // This is fine - HSV detection works well for basketballs (orange color)
       }
     }
 
@@ -343,13 +356,18 @@ async function analyzeVideo(options: any) {
         },
       });
 
-      console.log("Starting ball detection...");
+      console.log("Starting optimized ball detection...");
       self.postMessage({
         type: "debug",
-        data: { message: "🔍 Starting ball detection..." },
+        data: {
+          message:
+            "🔍 Starting optimized ball detection (processing 50% of frames at 50% resolution for HD videos)...",
+        },
       });
 
       try {
+        // PERFORMANCE: Reduced timeout and added progress tracking
+        const startTime = Date.now();
         const ballDetectionPromise = detectBall(
           frames,
           onnxBallDetector,
@@ -358,8 +376,8 @@ async function analyzeVideo(options: any) {
         );
         const ballTimeoutPromise = new Promise((_, reject) =>
           setTimeout(
-            () => reject(new Error("Ball detection timeout after 30s")),
-            30000
+            () => reject(new Error("Ball detection timeout after 20s")),
+            20000 // Reduced from 30s to 20s
           )
         );
 
@@ -368,13 +386,20 @@ async function analyzeVideo(options: any) {
           ballTimeoutPromise,
         ])) as any[];
 
+        const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(1);
+        console.log(`[Ball Detection] Completed in ${elapsedTime}s`);
+
+        const ballsFound = ballDetections.filter(
+          (bd: any) => bd.detections && bd.detections.length > 0
+        ).length;
+
         console.log(
-          `Ball detection complete: ${ballDetections.length} frames processed`
+          `Ball detection complete: ${ballDetections.length} frames processed, found ball in ${ballsFound} frames`
         );
         self.postMessage({
           type: "debug",
           data: {
-            message: `✅ Ball detection complete: ${ballDetections.length} frames`,
+            message: `✅ Ball detection complete in ${elapsedTime}s: found ball in ${ballsFound}/${ballDetections.length} frames`,
           },
         });
       } catch (error) {

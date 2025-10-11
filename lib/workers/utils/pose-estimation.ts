@@ -375,8 +375,8 @@ function analyzePoseForShot(
   }
 
   // Much lower thresholds to be more permissive
-  if (confidence > 0.1 && armElevation > 0.1) {
-    // Lowered from 0.3/0.2 to 0.1/0.1
+  if (confidence > 0.05 && armElevation > 0.05) {
+    // Lowered from 0.1/0.1 to 0.05/0.05 for high-quality videos
     if (typeof self !== "undefined" && self.postMessage) {
       self.postMessage({
         type: "debug",
@@ -414,7 +414,7 @@ function calculateArmElevation(
   wrist: { x: number; y: number; confidence: number }
 ): number {
   // Use much lower threshold and handle negative confidence values
-  const minConfidence = 0.05; // Lowered from 0.3 to 0.05
+  const minConfidence = 0.03; // Lowered from 0.05 to 0.03 for better sensitivity
   if (
     shoulder.confidence < minConfidence ||
     elbow.confidence < minConfidence ||
@@ -610,14 +610,14 @@ function generateFallbackShotAttempts(ballDetections: any[]): ShotAttempt[] {
       maxUpwardMotion = upwardMotion;
     }
 
-    // Lowered threshold from 20 to 10 pixels for amateur videos
-    if (upwardMotion > 10) {
+    // Lowered threshold from 10 to 8 pixels for better sensitivity
+    if (upwardMotion > 8) {
       const timestamp = currentFrame.timestamp || i * (1 / 30);
 
       shotAttempts.push({
         playerId: `fallback_player_${i}`,
         timestamp,
-        confidence: Math.min(0.7, 0.5 + upwardMotion / 100), // Increased base confidence
+        confidence: Math.min(0.75, 0.6 + upwardMotion / 100), // Increased base confidence from 0.5 to 0.6
         keypoints: {
           leftWrist: { x: 0, y: 0, confidence: 0.1 },
           rightWrist: { x: 0, y: 0, confidence: 0.1 },

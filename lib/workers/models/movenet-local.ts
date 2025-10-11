@@ -30,7 +30,7 @@ export interface MoveNetConfig {
  * to bypass CORS and network issues
  */
 export class LocalMoveNetPoseEstimator {
-  private model: tf.LayersModel | null = null;
+  private model: tf.LayersModel | tf.GraphModel | null = null;
   private config: MoveNetConfig;
   private previousPoses: Pose[] = [];
   private isMockModel: boolean = false;
@@ -136,47 +136,51 @@ export class LocalMoveNetPoseEstimator {
   }
 
   private async tryLoadLocalModel(): Promise<void> {
-    // Try to load from TensorFlow Hub directly
-    const modelUrl =
-      "https://tfhub.dev/google/tfjs-model/movenet/singlepose/lightning/4";
-
-    console.log(
-      `🔄 Trying to load MoveNet model from TensorFlow Hub: ${modelUrl}`
-    );
-
-    if (typeof self !== "undefined" && self.postMessage) {
-      self.postMessage({
-        type: "debug",
-        data: {
-          message: `🔄 Trying to load MoveNet model from TensorFlow Hub...`,
-        },
-      });
-    }
+    // Strategy 1: Try local model first
+    const localModelPath = "/models/movenet/model.json";
 
     try {
-      this.model = await tf.loadLayersModel(modelUrl, {
-        fromTFHub: true,
-        requestInit: {
-          mode: "cors",
-        },
-      });
-      console.log("✅ MoveNet model loaded successfully from TensorFlow Hub");
+      console.log(`🔄 Trying local MoveNet model: ${localModelPath}`);
+      this.model = await tf.loadGraphModel(localModelPath);
+      console.log("✅ MoveNet loaded from local storage");
 
       if (typeof self !== "undefined" && self.postMessage) {
         self.postMessage({
           type: "debug",
-          data: {
-            message: "✅ MoveNet model loaded successfully from TensorFlow Hub",
-          },
+          data: { message: "✅ MoveNet loaded from local storage" },
         });
       }
-    } catch (error) {
-      throw new Error(
-        `TensorFlow Hub model loading failed: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
+      return;
+    } catch (localError) {
+      console.log("Local model not found, trying CDN...");
     }
+
+    // Strategy 2: Try jsdelivr with direct model files
+    const cdnUrls = [
+      // Using jsdelivr GH repo (better CORS than npm for large files)
+      "https://cdn.jsdelivr.net/gh/tensorflow/tfjs-models/pose-detection/movenet/model.json",
+    ];
+
+    for (const url of cdnUrls) {
+      try {
+        console.log(`🔄 Trying CDN: ${url}`);
+        this.model = await tf.loadGraphModel(url);
+        console.log("✅ MoveNet loaded from CDN");
+
+        if (typeof self !== "undefined" && self.postMessage) {
+          self.postMessage({
+            type: "debug",
+            data: { message: "✅ MoveNet loaded successfully" },
+          });
+        }
+        return;
+      } catch (error) {
+        console.warn(`CDN failed: ${url}`);
+      }
+    }
+
+    // All attempts failed - throw to trigger fallback
+    throw new Error("Could not load MoveNet model - will use fallback");
   }
 
   private async createWorkingModel(): Promise<void> {
@@ -346,8 +350,17 @@ export class LocalMoveNetPoseEstimator {
       // Preprocess image
       const tensor = this.preprocessImage(imageData);
 
-      // Run inference
-      const predictions = this.model.predict(tensor) as tf.Tensor;
+      // Run inference - use executeAsync for GraphModel
+      let predictions: tf.Tensor;
+      if (this.model instanceof tf.GraphModel) {
+        // GraphModel needs execute/executeAsync with input name
+        const result = await (this.model as any).executeAsync(tensor);
+        predictions = Array.isArray(result) ? result[0] : result;
+      } else {
+        // LayersModel uses predict
+        predictions = this.model.predict(tensor) as tf.Tensor;
+      }
+
       const predictionsArray = await predictions.data();
 
       // Process predictions
@@ -392,12 +405,15 @@ export class LocalMoveNetPoseEstimator {
     // Convert ImageData to tensor and resize to 192x192 (MoveNet input size)
     const tensor = tf.browser.fromPixels(imageData);
     const resized = tf.image.resizeBilinear(tensor, [192, 192]);
-    const normalized = resized.div(255.0);
-    const batched = normalized.expandDims(0);
+
+    // MoveNet expects int32 input in range [0, 255]
+    // Cast to int32 as required by the model
+    const int32Tensor = resized.cast("int32");
+    const batched = int32Tensor.expandDims(0);
 
     tensor.dispose();
     resized.dispose();
-    normalized.dispose();
+    int32Tensor.dispose();
 
     return batched;
   }

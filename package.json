@@ -18,7 +18,9 @@
     "clean": "rm -rf node_modules && rm -rf .next && rm -rf .turbo && rm -rf .cursor && rm -rf .vercel && rm -rf .env && rm -rf .env.local && rm -rf .env.development.local && rm -rf .env.test.local && rm -rf .env.production.local",
     "setup": "sh setup.sh",
     "dev:clean": "sh dev.sh",
-    "dev:first": "./dev.sh"
+    "dev:first": "./dev.sh",
+    "postinstall": "node scripts/copy-wasm-files.js && bash scripts/download-movenet.sh",
+    "prepare": "node scripts/copy-wasm-files.js"
   },
   "dependencies": {
     "@tensorflow/tfjs": "^4.15.0",
@@ -26,7 +28,7 @@
     "comlink": "^4.4.1",
     "lucide-react": "^0.394.0",
     "next": "15.0.0",
-    "onnxruntime-web": "^1.16.3",
+    "onnxruntime-web": "1.23.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "recharts": "^2.8.0",

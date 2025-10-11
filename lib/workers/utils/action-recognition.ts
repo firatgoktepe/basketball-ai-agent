@@ -60,12 +60,13 @@ export function detectBlocks(
           rightWrist &&
           leftShoulder &&
           rightShoulder &&
-          leftWrist.confidence > 0.3 &&
-          rightWrist.confidence > 0.3
+          (leftWrist.confidence > 0.2 || rightWrist.confidence > 0.2) // More lenient - at least one arm visible
         ) {
           // Arms raised if wrists are above shoulders
-          const leftArmRaised = leftWrist.y < leftShoulder.y - 30;
-          const rightArmRaised = rightWrist.y < rightShoulder.y - 30;
+          const leftArmRaised =
+            leftWrist.confidence > 0.2 && leftWrist.y < leftShoulder.y - 25; // Reduced threshold
+          const rightArmRaised =
+            rightWrist.confidence > 0.2 && rightWrist.y < rightShoulder.y - 25; // Reduced threshold
 
           if (leftArmRaised || rightArmRaised) {
             // Check proximity to shooter
@@ -87,12 +88,19 @@ export function detectBlocks(
 
                 // If defender is close to shooter (within ~100 pixels)
                 if (dist < 150) {
+                  // Attribute block to the opposing team
+                  let blockTeamId = pose.teamId || "unknown";
+                  if (blockTeamId === "unknown" && shot.teamId) {
+                    // If defender has no teamId, assign to opposing team
+                    blockTeamId = shot.teamId === "teamA" ? "teamB" : "teamA";
+                  }
+
                   blocks.push({
                     id: `block-${Date.now()}-${Math.random()
                       .toString(36)
                       .substr(2, 9)}`,
                     type: "block",
-                    teamId: pose.teamId || "unknown",
+                    teamId: blockTeamId,
                     playerId: pose.playerId,
                     timestamp: poseFrame.timestamp,
                     confidence: 0.65,
@@ -124,15 +132,22 @@ export function detectPasses(
 ): GameEvent[] {
   const passes: GameEvent[] = [];
 
+  if (!ballDetections || ballDetections.length === 0) {
+    console.log("⚠️ Pass detection: No ball detections available");
+    return passes;
+  }
+
   let previousHolder: {
     teamId: string;
     playerId?: string;
     timestamp: number;
   } | null = null;
 
+  let framesWithBall = 0;
   for (const ballFrame of ballDetections) {
     const ballDet = ballFrame.detections?.find((d: any) => d.type === "ball");
     if (!ballDet) continue;
+    framesWithBall++;
 
     const [ballX, ballY] = [
       ballDet.bbox[0] + ballDet.bbox[2] / 2,
@@ -158,8 +173,8 @@ export function detectPasses(
       ];
       const dist = Math.sqrt(Math.pow(ballX - px, 2) + Math.pow(ballY - py, 2));
 
-      if (dist < minDist && dist < 80) {
-        // Within ~80 pixels
+      if (dist < minDist && dist < 120) {
+        // Within ~120 pixels (increased from 80)
         minDist = dist;
         closestPlayer = det;
       }
@@ -176,8 +191,9 @@ export function detectPasses(
       if (
         previousHolder &&
         previousHolder.teamId === currentHolder.teamId &&
+        previousHolder.teamId !== "unknown" && // Ensure valid team
         previousHolder.playerId !== currentHolder.playerId &&
-        currentHolder.timestamp - previousHolder.timestamp < 2.0
+        currentHolder.timestamp - previousHolder.timestamp < 3.0 // Increased from 2.0s
       ) {
         // Pass detected
         passes.push({
@@ -186,7 +202,7 @@ export function detectPasses(
           teamId: currentHolder.teamId,
           playerId: previousHolder.playerId, // Passer
           timestamp: currentHolder.timestamp,
-          confidence: 0.6,
+          confidence: 0.55, // Slightly lower confidence
           source: "ball-tracking",
           notes: `Pass from player ${previousHolder.playerId || "unknown"} to ${
             currentHolder.playerId || "unknown"
@@ -197,6 +213,10 @@ export function detectPasses(
       previousHolder = currentHolder;
     }
   }
+
+  console.log(
+    `🏀 Pass detection: Analyzed ${ballDetections.length} frames, ${framesWithBall} had ball detections, found ${passes.length} passes`
+  );
 
   return passes;
 }
@@ -233,21 +253,25 @@ export function detectDunks(
       const nose = pose.keypoints[0];
 
       if (
-        !leftWrist ||
-        !rightWrist ||
         !nose ||
-        leftWrist.confidence < 0.3 ||
-        rightWrist.confidence < 0.3
+        (!leftWrist && !rightWrist) || // At least one wrist must be visible
+        (leftWrist &&
+          leftWrist.confidence < 0.2 &&
+          rightWrist &&
+          rightWrist.confidence < 0.2)
       ) {
         continue;
       }
 
-      // Arms extended above head
-      const armsExtended =
-        leftWrist.y < nose.y - 50 || rightWrist.y < nose.y - 50;
+      // Arms extended above head (more lenient threshold)
+      const leftArmExtended =
+        leftWrist && leftWrist.confidence > 0.2 && leftWrist.y < nose.y - 25;
+      const rightArmExtended =
+        rightWrist && rightWrist.confidence > 0.2 && rightWrist.y < nose.y - 25;
+      const armsExtended = leftArmExtended || rightArmExtended; // At least one arm extended
 
-      // Player in top region of frame (near hoop)
-      const nearHoop = pose.bbox && pose.bbox[1] < 200; // Within top 200 pixels
+      // Player in top region of frame (near hoop) - more lenient
+      const nearHoop = pose.bbox && pose.bbox[1] < 300; // Increased from 200 to 300 pixels
 
       if (armsExtended && nearHoop) {
         dunks.push({
@@ -256,7 +280,7 @@ export function detectDunks(
           teamId: shot.teamId,
           playerId: pose.playerId || shot.playerId,
           timestamp: shot.timestamp,
-          confidence: 0.75,
+          confidence: 0.7, // Slightly lower confidence due to more lenient thresholds
           source: "pose-analysis",
           notes: `Dunk detected: arms extended above head near hoop`,
         });
@@ -307,13 +331,13 @@ export function detectLayups(
       if (
         !prevWrist ||
         !currWrist ||
-        prevWrist.confidence < 0.3 ||
-        currWrist.confidence < 0.3
+        prevWrist.confidence < 0.2 || // More lenient
+        currWrist.confidence < 0.2
       ) {
         continue;
       }
 
-      const armRaised = currWrist.y < prevWrist.y - 20;
+      const armRaised = currWrist.y < prevWrist.y - 15; // Reduced from 20 to 15
 
       // Check if player is in close range (top half of frame)
       const inCloseRange = currPose.bbox && currPose.bbox[1] < 300;
@@ -349,24 +373,25 @@ export function detectAssists(
   const assists: GameEvent[] = [];
 
   for (const score of scores) {
-    // Find pass within 2 seconds before score
+    // Find pass within 3 seconds before score (increased window)
     const recentPass = passes
       .filter(
         (p) =>
           p.teamId === score.teamId &&
           score.timestamp - p.timestamp > 0 &&
-          score.timestamp - p.timestamp < 2.0
+          score.timestamp - p.timestamp < 3.0 // Increased from 2.0 to 3.0
       )
       .sort((a, b) => b.timestamp - a.timestamp)[0]; // Get most recent
 
-    if (recentPass) {
+    if (recentPass && recentPass.playerId !== score.playerId) {
+      // Only count as assist if passer is different from scorer
       assists.push({
         id: `assist-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         type: "assist",
         teamId: recentPass.teamId,
         playerId: recentPass.playerId, // The passer
         timestamp: recentPass.timestamp,
-        confidence: 0.7 * recentPass.confidence * score.confidence,
+        confidence: 0.65 * recentPass.confidence * score.confidence, // Slightly lower
         source: "event-correlation",
         notes: `Assist: pass led to score at ${score.timestamp.toFixed(1)}s`,
       });
@@ -386,6 +411,11 @@ export function detectDribbles(
 ): GameEvent[] {
   const dribbles: GameEvent[] = [];
 
+  if (!ballDetections || ballDetections.length === 0) {
+    console.log("⚠️ Dribble detection: No ball detections available");
+    return dribbles;
+  }
+
   // Track ball height over time for oscillation detection
   const ballHeights: Array<{
     timestamp: number;
@@ -393,9 +423,11 @@ export function detectDribbles(
     playerId?: string;
   }> = [];
 
+  let framesWithBall = 0;
   for (const ballFrame of ballDetections) {
     const ballDet = ballFrame.detections?.find((d: any) => d.type === "ball");
     if (!ballDet) continue;
+    framesWithBall++;
 
     const ballY = ballDet.bbox[1] + ballDet.bbox[3] / 2;
 
@@ -421,7 +453,8 @@ export function detectDribbles(
           Math.pow(ballX - px, 2) + Math.pow(ballY - py, 2)
         );
 
-        if (dist < minDist && dist < 60) {
+        if (dist < minDist && dist < 100) {
+          // Increased from 60 to 100
           minDist = dist;
           closestPlayerId = det.playerId;
         }
@@ -456,14 +489,14 @@ export function detectDribbles(
       }
     }
 
-    // If 3+ direction changes, likely dribbling
-    if (directionChanges >= 3) {
+    // If 2+ direction changes, likely dribbling (lowered threshold)
+    if (directionChanges >= 2) {
       const timestamp = window[window.length - 1].timestamp;
 
       // Check if we already recorded dribble for this player recently
       const recentDribble = dribbles.find(
         (d) =>
-          d.playerId === playerId && Math.abs(d.timestamp - timestamp) < 1.0
+          d.playerId === playerId && Math.abs(d.timestamp - timestamp) < 1.5
       );
 
       if (!recentDribble) {
@@ -490,6 +523,10 @@ export function detectDribbles(
       }
     }
   }
+
+  console.log(
+    `⛹️ Dribble detection: Analyzed ${ballDetections.length} frames, ${framesWithBall} had ball detections, found ${dribbles.length} dribbles`
+  );
 
   return dribbles;
 }
@@ -522,22 +559,39 @@ export function detectFoulShots(
 
     if (!shooter) continue;
 
-    // Check if shooter is isolated (no defenders nearby)
+    // Check if shooter is isolated or in foul line area
     const defenders = personFrame.detections?.filter(
-      (d: any) => d.type === "person" && d.teamId !== shot.teamId
+      (d: any) => d.type === "person" && d.teamId !== shot.teamId && d.bbox
     );
 
-    if (!defenders || defenders.length === 0) {
-      // No defenders visible - potential foul shot scenario
-      // Additional check: ball should be relatively stationary before shot
+    // Count nearby defenders (within reasonable distance)
+    let nearbyDefenders = 0;
+    if (defenders && defenders.length > 0 && shooter.bbox) {
+      const [sx, sy] = [
+        shooter.bbox[0] + shooter.bbox[2] / 2,
+        shooter.bbox[1] + shooter.bbox[3] / 2,
+      ];
+
+      for (const defender of defenders) {
+        const [dx, dy] = [
+          defender.bbox[0] + defender.bbox[2] / 2,
+          defender.bbox[1] + defender.bbox[3] / 2,
+        ];
+        const dist = Math.sqrt(Math.pow(sx - dx, 2) + Math.pow(sy - dy, 2));
+        if (dist < 100) nearbyDefenders++;
+      }
+    }
+
+    // Foul shot if shooter is relatively isolated (0-1 nearby defenders)
+    if (nearbyDefenders <= 1) {
+      // Either no ball detection OR ball near shooter
+      let hasBallEvidence = false;
       const ballFrame = ballDetections.find(
-        (b) => Math.abs(b.timestamp - shot.timestamp + 0.5) < 0.2
-      ); // 0.5s before shot
+        (b) => Math.abs(b.timestamp - shot.timestamp + 0.5) < 0.3
+      );
 
       if (ballFrame) {
         const ball = ballFrame.detections?.find((d: any) => d.type === "ball");
-
-        // Check if ball was near shooter's position
         if (ball && shooter.bbox) {
           const [ballX, ballY] = [
             ball.bbox[0] + ball.bbox[2] / 2,
@@ -550,24 +604,25 @@ export function detectFoulShots(
           const dist = Math.sqrt(
             Math.pow(ballX - shooterX, 2) + Math.pow(ballY - shooterY, 2)
           );
-
-          if (dist < 50) {
-            // Ball was near shooter
-            foulShots.push({
-              id: `foul-shot-${Date.now()}-${Math.random()
-                .toString(36)
-                .substr(2, 9)}`,
-              type: "foul_shot",
-              teamId: shot.teamId,
-              playerId: shot.playerId,
-              shotType: "1pt",
-              timestamp: shot.timestamp,
-              confidence: 0.55, // Lower confidence as it's heuristic-based
-              source: "isolation-heuristic",
-              notes: `Foul shot detected: isolated shooter with stationary ball`,
-            });
-          }
+          hasBallEvidence = dist < 70;
         }
+      }
+
+      // Create foul shot event even without ball evidence if very isolated
+      if (hasBallEvidence || nearbyDefenders === 0) {
+        foulShots.push({
+          id: `foul-shot-${Date.now()}-${Math.random()
+            .toString(36)
+            .substr(2, 9)}`,
+          type: "foul_shot",
+          teamId: shot.teamId,
+          playerId: shot.playerId,
+          shotType: "1pt",
+          timestamp: shot.timestamp,
+          confidence: hasBallEvidence ? 0.6 : 0.5,
+          source: "isolation-heuristic",
+          notes: `Foul shot detected: ${nearbyDefenders} nearby defenders`,
+        });
       }
     }
   }
@@ -589,28 +644,43 @@ export function detectAllActions(
 ): GameEvent[] {
   const allActions: GameEvent[] = [];
 
+  console.log(`🎯 Action Detection - Input data:
+    - Shot attempts: ${shotAttempts.length}
+    - Scores: ${scores.length}
+    - Pose detections: ${poseDetections.length}
+    - Person detections: ${personDetections.length}
+    - Ball detections: ${ballDetections.length}`);
+
   // Detect blocks
   const blocks = detectBlocks(shotAttempts, poseDetections, personDetections);
+  console.log(`🚫 Detected ${blocks.length} blocks`);
   allActions.push(...blocks);
 
   // Detect passes
   const passes = detectPasses(ballDetections, personDetections, teamClusters);
+  console.log(`🏀 Detected ${passes.length} passes`);
   allActions.push(...passes);
 
   // Detect dunks
   const dunks = detectDunks(shotAttempts, poseDetections, personDetections);
+  console.log(`💪 Detected ${dunks.length} dunks`);
   allActions.push(...dunks);
 
   // Detect layups
   const layups = detectLayups(shotAttempts, poseDetections, personDetections);
+  console.log(`🏃 Detected ${layups.length} layups`);
   allActions.push(...layups);
 
   // Detect assists (requires scores and passes)
   const assists = detectAssists(passes, scores);
+  console.log(
+    `🤝 Detected ${assists.length} assists (from ${passes.length} passes)`
+  );
   allActions.push(...assists);
 
   // Detect dribbles
   const dribbles = detectDribbles(ballDetections, personDetections);
+  console.log(`⛹️ Detected ${dribbles.length} dribbles`);
   allActions.push(...dribbles);
 
   // Detect foul shots
@@ -619,7 +689,10 @@ export function detectAllActions(
     personDetections,
     ballDetections
   );
+  console.log(`🎯 Detected ${foulShots.length} foul shots`);
   allActions.push(...foulShots);
+
+  console.log(`📊 Total actions detected: ${allActions.length}`);
 
   return allActions;
 }

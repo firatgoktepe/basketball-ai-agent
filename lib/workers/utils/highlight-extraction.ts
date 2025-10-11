@@ -34,48 +34,22 @@ export interface HighlightFilter {
 export function extractHighlights(
   events: GameEvent[],
   beforeBuffer: number = 2.0,
-  afterBuffer: number = 3.0
+  afterBuffer: number = 3.0,
+  minConfidence: number = 0.4 // Lowered default from 0.5
 ): HighlightClip[] {
   const highlights: HighlightClip[] = [];
 
-  // Event types worth highlighting
-  const highlightableEvents = [
-    "score",
-    "dunk",
-    "block",
-    "steal",
-    "assist",
-    "3pt",
-  ];
-
+  // Create highlights for ALL events (not just specific types)
+  // This allows users to see every detected event in the timeline
   for (const event of events) {
-    // Only create highlights for significant events
-    if (!highlightableEvents.includes(event.type)) {
-      continue;
-    }
-
-    // Skip low-confidence events
-    if (event.confidence < 0.5) {
+    // Skip very low-confidence events (but be inclusive)
+    if (event.confidence < minConfidence) {
       continue;
     }
 
     const startTime = Math.max(0, event.timestamp - beforeBuffer);
     const endTime = event.timestamp + afterBuffer;
     const duration = endTime - startTime;
-
-    // Debug log for investigation
-    if (duration <= 0 || duration < 5.0) {
-      console.warn(
-        `⚠️ Invalid highlight detected:`,
-        `\n  Event: ${event.id} (${event.type})`,
-        `\n  Timestamp: ${event.timestamp}s`,
-        `\n  StartTime: ${startTime}s`,
-        `\n  EndTime: ${endTime}s`,
-        `\n  Duration: ${duration}s`,
-        `\n  BeforeBuffer: ${beforeBuffer}s`,
-        `\n  AfterBuffer: ${afterBuffer}s`
-      );
-    }
 
     // Skip highlights with zero or negative duration
     if (duration <= 0) {
@@ -85,12 +59,12 @@ export function extractHighlights(
       continue;
     }
 
-    // Skip highlights that are too short (minimum 5 seconds)
+    // Skip highlights that are too short (minimum 5 seconds total)
     if (duration < 5.0) {
-      console.warn(
-        `❌ Skipping highlight with too short duration: ${duration.toFixed(
-          2
-        )}s (minimum: 5.0s) for event ${event.id}`
+      console.log(
+        `⏭️ Skipping highlight (too short): ${duration.toFixed(2)}s for ${
+          event.type
+        } at ${event.timestamp.toFixed(1)}s`
       );
       continue;
     }
@@ -109,7 +83,7 @@ export function extractHighlights(
   }
 
   console.log(
-    `✅ Extracted ${highlights.length} valid highlights from ${events.length} events`
+    `✅ Extracted ${highlights.length} highlights from ${events.length} events (min confidence: ${minConfidence}, min duration: 5.0s)`
   );
   return highlights;
 }
@@ -185,6 +159,7 @@ export function groupHighlightsByType(
 
 /**
  * Generate descriptive text for highlight
+ * Supports all event types
  */
 function generateHighlightDescription(event: GameEvent): string {
   const playerText = event.playerId ? `Player ${event.playerId}` : "Player";
@@ -202,12 +177,28 @@ function generateHighlightDescription(event: GameEvent): string {
       return `${playerText} assists!`;
     case "3pt":
       return `${playerText} makes a 3-pointer!`;
+    case "shot_attempt":
+      return `${playerText} attempts a shot`;
+    case "missed_shot":
+      return `${playerText} misses the shot`;
     case "offensive_rebound":
       return `${playerText} offensive rebound`;
     case "defensive_rebound":
       return `${playerText} defensive rebound`;
+    case "turnover":
+      return `${playerText} turnover`;
+    case "pass":
+      return `${playerText} passes the ball`;
+    case "dribble":
+      return `${playerText} dribbles`;
+    case "foul_shot":
+      return `${playerText} free throw attempt`;
+    case "layup":
+      return `${playerText} layup`;
+    case "long_distance_attempt":
+      return `${playerText} long distance attempt`;
     default:
-      return `${playerText} - ${event.type}`;
+      return `${playerText} - ${String(event.type).replace(/_/g, " ")}`;
   }
 }
 
@@ -255,7 +246,7 @@ export function mergeOverlappingHighlights(
 
 /**
  * Get top N highlights by event significance
- * Prioritizes: dunks > 3pt > blocks > scores > assists
+ * Prioritizes: dunks > 3pt > blocks > scores > steals > assists > rebounds > shots
  */
 export function getTopHighlights(
   highlights: HighlightClip[],
@@ -267,9 +258,17 @@ export function getTopHighlights(
     block: 8,
     score: 7,
     steal: 6,
+    foul_shot: 5.5, // Free throws are significant
     assist: 5,
+    layup: 4.5,
     offensive_rebound: 4,
     defensive_rebound: 3,
+    shot_attempt: 2,
+    pass: 1.5,
+    dribble: 1,
+    turnover: 2.5,
+    missed_shot: 2,
+    long_distance_attempt: 3.5,
   };
 
   return [...highlights]

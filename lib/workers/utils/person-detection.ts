@@ -103,7 +103,8 @@ async function detectPersonsInFrame(
 
     for (let i = 0; i < scores.length; i++) {
       // COCO class 0 is 'person'
-      if (classes[i] === 0 && scores[i] > 0.5) {
+      // Lowered threshold from 0.5 to 0.3 for better detection in high-quality videos
+      if (classes[i] === 0 && scores[i] > 0.3) {
         const [y1, x1, y2, x2] = boxes.slice(i * 4, (i + 1) * 4);
 
         // Convert normalized coordinates to pixel coordinates

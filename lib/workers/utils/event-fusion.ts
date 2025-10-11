@@ -162,21 +162,48 @@ export async function fuseEvents(options: FusionOptions): Promise<GameEvent[]> {
   events.push(...missedShotEvents);
 
   // Rule C: Rebound detection
+  // Check if ball detections contain actual ball data
+  const ballFramesWithBalls = ballDetections.filter(
+    (frame) => frame.detections && frame.detections.length > 0
+  ).length;
+  console.log(
+    `🔄 Detecting rebounds from ${shotEvents.length} shots (ball data: ${ballFramesWithBalls}/${ballDetections.length} frames)...`
+  );
+
   const reboundEvents = await detectRebounds(
     shotEvents,
     ballDetections,
     personDetections,
     teamClusters
   );
+  console.log(`📊 Detected ${reboundEvents.length} rebounds`);
   events.push(...reboundEvents);
 
   // Rule D: Turnover/Steal detection
+  console.log(`🔄 Detecting turnovers from ball possession changes...`);
   const turnoverEvents = await detectTurnovers(
     personDetections,
     ballDetections,
     teamClusters
   );
+  console.log(`📊 Detected ${turnoverEvents.length} turnovers/steals`);
   events.push(...turnoverEvents);
+
+  // Fallback: Infer turnovers from score patterns if insufficient ball data
+  if (turnoverEvents.length === 0 && ballFramesWithBalls < 10) {
+    console.log(
+      `⚠️ Insufficient ball data (${ballFramesWithBalls} frames) - inferring turnovers from game flow...`
+    );
+    const inferredTurnovers = inferTurnoversFromGameFlow(
+      shotEvents,
+      scoreEvents,
+      personDetections
+    );
+    console.log(
+      `📊 Inferred ${inferredTurnovers.length} turnovers from game flow`
+    );
+    events.push(...inferredTurnovers);
+  }
 
   // Rule E: 3PT estimation (if enabled)
   if (enable3ptEstimation) {
@@ -199,8 +226,9 @@ export async function fuseEvents(options: FusionOptions): Promise<GameEvent[]> {
     );
   });
 
-  // Use much lower confidence threshold to capture more events
-  const filteredEvents = filterLowConfidenceEvents(smoothedEvents, 0.1);
+  // Filter out very low confidence events while keeping medium/high ones
+  // Threshold of 0.4 to be more inclusive of detected events
+  const filteredEvents = filterLowConfidenceEvents(smoothedEvents, 0.4);
 
   console.log(
     `📊 Filtered ${smoothedEvents.length} events down to ${filteredEvents.length} events`
@@ -512,15 +540,21 @@ async function detectShotAttempts(
       teamClusters
     );
 
-    // More permissive confidence calculation
+    // Optimized confidence calculation - give more weight to pose
+    // Pose detection is more reliable than ball motion for shot detection
     const combinedConfidence = computeConfidence([
-      { signal: "pose", value: Math.max(0.1, poseConfidence), weight: 0.4 },
+      { signal: "pose", value: Math.max(0.15, poseConfidence), weight: 0.65 }, // Increased weight from 0.4 to 0.65
       {
         signal: "ball-motion",
-        value: Math.max(0.1, ballMotionConfidence),
-        weight: 0.6,
+        value: Math.max(0.15, ballMotionConfidence),
+        weight: 0.35, // Decreased weight from 0.6 to 0.35
       },
     ]);
+
+    // Apply quality boost if both signals are strong
+    const qualityBoost =
+      poseConfidence > 0.6 && ballMotionConfidence > 0.4 ? 0.1 : 0;
+    const finalConfidence = Math.min(0.95, combinedConfidence + qualityBoost);
 
     events.push({
       id: `shot-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -528,7 +562,7 @@ async function detectShotAttempts(
       teamId: teamId || "teamA",
       playerId, // Preserve playerId from shot attempt
       timestamp,
-      confidence: Math.max(0.2, combinedConfidence), // Ensure minimum confidence
+      confidence: Math.max(0.3, finalConfidence), // Raised minimum from 0.2 to 0.3
       source:
         ballMotionConfidence > 0 ? "pose+ball-heuristic" : "pose-analysis",
       notes: `Pose confidence: ${(poseConfidence * 100).toFixed(
@@ -792,6 +826,7 @@ function calculateDistance(
 /**
  * Rule C: Rebound detection
  * Analyzes ball possession changes after shot attempts
+ * Enhanced with fallback when ball detection is poor
  */
 async function detectRebounds(
   shotEvents: GameEvent[],
@@ -806,13 +841,18 @@ async function detectRebounds(
       continue;
     }
 
-    // Look for ball presence and player proximity after shot attempt
-    const reboundEvent = findReboundEvent(
+    // Try ball-based rebound detection first
+    let reboundEvent = findReboundEvent(
       shot,
       ballDetections,
       personDetections,
       teamClusters
     );
+
+    // Fallback: If no ball detection, infer rebound from person movements
+    if (!reboundEvent && shot.type === "missed_shot") {
+      reboundEvent = inferReboundFromPersonMovement(shot, personDetections);
+    }
 
     if (reboundEvent) {
       events.push(reboundEvent);
@@ -864,18 +904,26 @@ function findReboundEvent(
       personFrame.detections || []
     );
 
-    if (closestPlayer && closestPlayer.distance < 100) {
+    if (closestPlayer && closestPlayer.distance < 150) {
+      // Increased threshold from 100 to 150
+      // Fix unknown teamId issue for rebounds
+      let reboundTeamId = closestPlayer.teamId;
+      if (!reboundTeamId || reboundTeamId === "unknown") {
+        // Default to same team as shooter (offensive rebound)
+        reboundTeamId = shot.teamId;
+      }
+
       // Determine if offensive or defensive rebound
-      const isOffensive = closestPlayer.teamId === shot.teamId;
+      const isOffensive = reboundTeamId === shot.teamId;
       const confidence = computeConfidence([
         {
           signal: "ball-proximity",
-          value: 1.0 - closestPlayer.distance / 100,
+          value: 1.0 - closestPlayer.distance / 150, // Adjusted denominator
           weight: 0.6,
         },
         {
           signal: "team-id",
-          value: closestPlayer.teamId ? 1.0 : 0.5,
+          value: reboundTeamId && reboundTeamId !== "unknown" ? 1.0 : 0.5,
           weight: 0.4,
         },
       ]);
@@ -883,14 +931,14 @@ function findReboundEvent(
       // Find player ID for the rebound
       const playerId = findPlayerIdForEvent(
         ballFrame.timestamp,
-        closestPlayer.teamId || shot.teamId,
+        reboundTeamId,
         personDetections
       );
 
       return {
         id: `rebound-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         type: isOffensive ? "offensive_rebound" : "defensive_rebound",
-        teamId: closestPlayer.teamId || shot.teamId,
+        teamId: reboundTeamId,
         playerId,
         timestamp: ballFrame.timestamp,
         confidence,
@@ -929,6 +977,67 @@ function findClosestPlayer(
   }
 
   return closestPlayer;
+}
+
+/**
+ * Infer rebound from person movements when ball detection is unavailable
+ * Looks for player activity near hoop area after missed shot
+ */
+function inferReboundFromPersonMovement(
+  shot: GameEvent,
+  personDetections: any[]
+): GameEvent | null {
+  const startTime = shot.timestamp + 0.3;
+  const endTime = shot.timestamp + 1.5; // Shorter window for person-based detection
+
+  // Find person detections in rebound window
+  const reboundFrames = personDetections.filter(
+    (frame) => frame.timestamp >= startTime && frame.timestamp <= endTime
+  );
+
+  if (reboundFrames.length === 0) {
+    return null;
+  }
+
+  // Look for player in hoop area (top 40% of frame)
+  for (const personFrame of reboundFrames) {
+    if (!personFrame.detections || personFrame.detections.length === 0) {
+      continue;
+    }
+
+    // Find players near hoop
+    const playersNearHoop = personFrame.detections.filter((det: any) => {
+      if (det.type !== "person" || !det.bbox) return false;
+      const centerY =
+        (det.bbox[1] + det.bbox[3] / 2) / (personFrame.height || 1080);
+      return centerY < 0.4; // Top 40% of frame
+    });
+
+    if (playersNearHoop.length > 0) {
+      // Pick player with valid teamId
+      const rebounder =
+        playersNearHoop.find((p: any) => p.teamId && p.teamId !== "unknown") ||
+        playersNearHoop[0];
+
+      let reboundTeamId = rebounder.teamId || shot.teamId;
+      const isOffensive = reboundTeamId === shot.teamId;
+
+      return {
+        id: `rebound-inferred-${Date.now()}-${Math.random()
+          .toString(36)
+          .substr(2, 9)}`,
+        type: isOffensive ? "offensive_rebound" : "defensive_rebound",
+        teamId: reboundTeamId,
+        playerId: rebounder.playerId,
+        timestamp: personFrame.timestamp,
+        confidence: 0.45, // Lower confidence for inferred rebounds
+        source: "person-movement-inference",
+        notes: `Rebound inferred from player near hoop (ball detection unavailable)`,
+      };
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -1034,20 +1143,20 @@ function trackPossessionChanges(
 
     if (
       closestPlayer &&
-      closestPlayer.distance < 80 &&
+      closestPlayer.distance < 100 && // Increased from 80 to 100
       closestPlayer.teamId !== "unknown"
     ) {
       if (lastPossession && lastPossession.teamId !== closestPlayer.teamId) {
         // Possession change detected
         const timeSinceLastPossession =
           ballFrame.timestamp - lastPossession.timestamp;
-        const isSudden = timeSinceLastPossession < 1.0; // Less than 1 second = steal
+        const isSudden = timeSinceLastPossession < 1.5; // Increased from 1.0 to 1.5 seconds
 
         changes.push({
           timestamp: ballFrame.timestamp,
           fromTeam: lastPossession.teamId,
           toTeam: closestPlayer.teamId,
-          confidence: 0.75 + (isSudden ? 0.15 : 0), // Higher confidence for sudden changes
+          confidence: 0.65 + (isSudden ? 0.1 : 0), // Slightly lower base confidence
           isSudden,
         });
       }
@@ -1060,6 +1169,57 @@ function trackPossessionChanges(
   }
 
   return changes;
+}
+
+/**
+ * Infer turnovers from game flow when ball detection is unavailable
+ * Uses patterns like: missed shot by team A followed by shot by team B = possession change
+ */
+function inferTurnoversFromGameFlow(
+  shotEvents: GameEvent[],
+  scoreEvents: GameEvent[],
+  personDetections: any[]
+): GameEvent[] {
+  const turnovers: GameEvent[] = [];
+
+  // Look for possession changes: shot by team A, then shot by team B within 5-10 seconds
+  for (let i = 0; i < shotEvents.length - 1; i++) {
+    const currentShot = shotEvents[i];
+    const nextShot = shotEvents[i + 1];
+
+    if (currentShot.teamId === nextShot.teamId) continue; // Same team, no turnover
+
+    const timeDiff = nextShot.timestamp - currentShot.timestamp;
+
+    // If team changes and time gap is 3-15 seconds, likely a turnover/possession change
+    if (timeDiff > 3.0 && timeDiff < 15.0) {
+      // Check if current shot was missed
+      const scoredAfterCurrentShot = scoreEvents.some(
+        (score) =>
+          score.teamId === currentShot.teamId &&
+          score.timestamp > currentShot.timestamp &&
+          score.timestamp < currentShot.timestamp + 2.0
+      );
+
+      if (!scoredAfterCurrentShot) {
+        // Missed shot followed by opponent possession = turnover
+        turnovers.push({
+          id: `turnover-inferred-${Date.now()}-${Math.random()
+            .toString(36)
+            .substr(2, 9)}`,
+          type: "turnover",
+          teamId: currentShot.teamId,
+          playerId: currentShot.playerId,
+          timestamp: currentShot.timestamp + timeDiff / 2, // Estimate midpoint
+          confidence: 0.45,
+          source: "game-flow-inference",
+          notes: `Turnover inferred from possession change pattern`,
+        });
+      }
+    }
+  }
+
+  return turnovers;
 }
 
 /**
@@ -1162,8 +1322,16 @@ function computeConfidence(
     0
   );
 
+  // Apply confidence boost for multiple strong signals
+  let finalConfidence = weightedSum;
+  const strongSignals = signals.filter((s) => s.value > 0.6);
+  if (strongSignals.length >= 2) {
+    // Multiple strong signals - add bonus
+    finalConfidence += 0.08;
+  }
+
   // Clamp to [0, 1]
-  return Math.max(0, Math.min(1, weightedSum));
+  return Math.max(0, Math.min(1, finalConfidence));
 }
 
 /**
