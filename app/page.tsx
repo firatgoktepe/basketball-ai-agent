@@ -210,7 +210,7 @@ export default function Home() {
                 <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-3 sm:mb-4 drop-shadow-lg">
                   Basketball Quick Stats
                 </h1>
-                <p className="text-center text-white/90 max-w-2xl mx-auto text-sm sm:text-base px-4 drop-shadow-md">
+                <p className="text-center text-white/90 max-w-2xl mx-auto text-sm sm:text-base px-4 drop-shadow-md hidden sm:block">
                   AI-powered amateur basketball game analysis tool. Upload a
                   video and get detailed player statistics, action recognition,
                   and highlight clips automatically extracted from the footage.
@@ -312,7 +312,8 @@ export default function Home() {
           <div className="relative container mx-auto px-4 py-8">
             <div className="text-center">
               <p className="text-white/80 text-sm">
-                © 2024 Basketball Quick Stats - AI-powered basketball analysis
+                © {new Date().getFullYear()} Basketball Quick Stats - AI-powered
+                basketball analysis app by SPOT
               </p>
             </div>
           </div>
