@@ -68,9 +68,9 @@ export function Highlights({
               `\n  Original duration: ${highlight.duration}s`,
               `\n  Start: ${highlight.startTime}s`,
               `\n  End: ${highlight.endTime}s`,
-              `\n  Setting to 5.0s`
+              `\n  Setting to 10.0s`
             );
-            duration = 5.0;
+            duration = 10.0;
             endTime = highlight.startTime + duration;
           }
 
@@ -89,19 +89,19 @@ export function Highlights({
           };
         })
         .filter((highlight) => {
-          const isValid = highlight.duration >= 5.0;
+          const isValid = highlight.duration >= 10.0;
           if (!isValid) {
             console.warn(
               `❌ Filtering out highlight with duration ${highlight.duration.toFixed(
                 2
-              )}s (minimum: 5.0s)`
+              )}s (minimum: 10.0s)`
             );
           }
           return isValid;
         });
 
       console.log(
-        `✅ ${processed.length} valid highlights after processing (min 5s duration)`
+        `✅ ${processed.length} valid highlights after processing (min 10s duration)`
       );
       return processed;
     }
@@ -131,8 +131,8 @@ export function Highlights({
     const created = filteredEvents
       .map((event, index) => {
         // Calculate duration based on time to next event or end of video
-        // Minimum duration: 5 seconds to ensure highlights are viewable
-        const MIN_HIGHLIGHT_DURATION = 5.0;
+        // Minimum duration: 10 seconds to ensure highlights are viewable
+        const MIN_HIGHLIGHT_DURATION = 10.0;
         let endTime: number;
 
         if (index < filteredEvents.length - 1) {
@@ -171,19 +171,19 @@ export function Highlights({
         };
       })
       .filter((highlight) => {
-        const isValid = highlight.duration >= 5.0;
+        const isValid = highlight.duration >= 10.0;
         if (!isValid) {
           console.warn(
             `❌ Filtering out highlight:`,
             `${highlight.event.type} at ${highlight.startTime.toFixed(2)}s,`,
-            `duration: ${highlight.duration.toFixed(2)}s (minimum: 5.0s)`
+            `duration: ${highlight.duration.toFixed(2)}s (minimum: 10.0s)`
           );
         }
         return isValid;
       });
 
     console.log(
-      `✅ ${created.length} valid highlights created from events (min 5s duration)`
+      `✅ ${created.length} valid highlights created from events (min 10s duration)`
     );
     return created;
   })();

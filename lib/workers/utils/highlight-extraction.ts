@@ -28,14 +28,14 @@ export interface HighlightFilter {
 /**
  * Extract highlight clips from game events
  * @param events - All game events
- * @param beforeBuffer - Seconds to include before event (default: 2s)
- * @param afterBuffer - Seconds to include after event (default: 3s)
+ * @param beforeBuffer - Seconds to include before event (default: 3s)
+ * @param afterBuffer - Seconds to include after event (default: 7s)
  */
 export function extractHighlights(
   events: GameEvent[],
-  beforeBuffer: number = 2.0,
-  afterBuffer: number = 3.0,
-  minConfidence: number = 0.4 // Lowered default from 0.5
+  beforeBuffer: number = 3.0,
+  afterBuffer: number = 7.0,
+  minConfidence: number = 0.7 // High confidence only for highlight videos
 ): HighlightClip[] {
   const highlights: HighlightClip[] = [];
 
@@ -59,8 +59,8 @@ export function extractHighlights(
       continue;
     }
 
-    // Skip highlights that are too short (minimum 5 seconds total)
-    if (duration < 5.0) {
+    // Skip highlights that are too short (minimum 10 seconds total)
+    if (duration < 10.0) {
       console.log(
         `⏭️ Skipping highlight (too short): ${duration.toFixed(2)}s for ${
           event.type
@@ -83,7 +83,7 @@ export function extractHighlights(
   }
 
   console.log(
-    `✅ Extracted ${highlights.length} highlights from ${events.length} events (min confidence: ${minConfidence}, min duration: 5.0s)`
+    `✅ Extracted ${highlights.length} highlights from ${events.length} events (min confidence: ${minConfidence}, min duration: 10.0s)`
   );
   return highlights;
 }

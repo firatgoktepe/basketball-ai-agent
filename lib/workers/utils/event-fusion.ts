@@ -1224,7 +1224,8 @@ function inferTurnoversFromGameFlow(
 
 /**
  * Rule E: 3-point attempt estimation
- * Uses court geometry and player position (low confidence)
+ * Uses court geometry and player position
+ * IMPROVED: Lower threshold and better attribution
  */
 function detect3PointAttempts(
   shotEvents: GameEvent[],
@@ -1232,6 +1233,10 @@ function detect3PointAttempts(
   personDetections: any[]
 ): GameEvent[] {
   const events: GameEvent[] = [];
+
+  console.log(
+    `🎯 Checking ${shotEvents.length} shot attempts for 3-point detection...`
+  );
 
   for (const shot of shotEvents) {
     if (shot.type !== "shot_attempt") {
@@ -1246,10 +1251,15 @@ function detect3PointAttempts(
     );
 
     if (is3Point.isLongDistance) {
+      // Lower threshold from 0.4 to 0.35 to catch more 3-pointers
+      const eventType =
+        is3Point.confidence > 0.35 ? "3pt" : "long_distance_attempt";
+
       events.push({
         id: `3pt-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        type: is3Point.confidence > 0.4 ? "3pt" : "long_distance_attempt",
+        type: eventType,
         teamId: shot.teamId,
+        playerId: shot.playerId, // Preserve player ID from shot attempt
         timestamp: shot.timestamp,
         confidence: is3Point.confidence,
         source: "court-geometry-heuristic",
@@ -1257,15 +1267,25 @@ function detect3PointAttempts(
           is3Point.confidence * 100
         ).toFixed(0)}%)`,
       });
+
+      console.log(
+        `✅ Detected ${eventType} at ${shot.timestamp.toFixed(
+          1
+        )}s (confidence: ${(is3Point.confidence * 100).toFixed(0)}%)`
+      );
     }
   }
 
+  console.log(
+    `📊 Detected ${events.length} 3-point attempts from ${shotEvents.length} shots`
+  );
   return events;
 }
 
 /**
  * Estimates if a shot was taken from 3-point range
  * Based on player position relative to court
+ * IMPROVED: More aggressive detection with multiple heuristics
  */
 function estimate3PointDistance(
   timestamp: number,
@@ -1277,26 +1297,78 @@ function estimate3PointDistance(
     (p) => Math.abs(p.timestamp - timestamp) <= 0.1
   );
 
-  if (!pose || !pose.poses || pose.poses.length === 0) {
-    return { isLongDistance: false, confidence: 0 };
-  }
+  // Also check person detections as fallback
+  const personFrame = personDetections.find(
+    (p) => Math.abs(p.timestamp - timestamp) <= 0.2
+  );
 
-  // Simple heuristic: players in the lower 40% of frame are likely beyond 3pt line
-  // This is a rough approximation and would need court geometry for accuracy
-  const shooterPose = pose.poses[0];
-  if (shooterPose.bbox) {
-    const [x, y, w, h] = shooterPose.bbox;
-    const centerY = (y + h / 2) / pose.height; // Normalize to 0-1
+  let maxConfidence = 0;
+  let isLongDistance = false;
 
-    // If player is in lower part of frame (further from hoop), likely 3pt
-    if (centerY > 0.6) {
-      return { isLongDistance: true, confidence: 0.7 };
-    } else if (centerY > 0.5) {
-      return { isLongDistance: true, confidence: 0.5 };
+  // Check pose-based detection
+  if (pose && pose.poses && pose.poses.length > 0) {
+    const shooterPose = pose.poses[0];
+    if (shooterPose.bbox) {
+      const [x, y, w, h] = shooterPose.bbox;
+      const centerY = (y + h / 2) / pose.height; // Normalize to 0-1
+      const centerX = (x + w / 2) / pose.width; // Normalize to 0-1
+
+      // More aggressive detection based on position
+      // Players in lower half or corners are more likely taking 3-pointers
+      if (centerY > 0.55) {
+        // Lower half of frame (further from hoop)
+        const distanceFromCenter = Math.abs(centerX - 0.5);
+
+        if (centerY > 0.7) {
+          // Very far from basket
+          isLongDistance = true;
+          maxConfidence = Math.max(maxConfidence, 0.75);
+        } else if (centerY > 0.6) {
+          // Moderately far
+          isLongDistance = true;
+          maxConfidence = Math.max(maxConfidence, 0.65);
+        } else if (distanceFromCenter > 0.25) {
+          // Corner shots (even if not very far)
+          isLongDistance = true;
+          maxConfidence = Math.max(maxConfidence, 0.6);
+        } else {
+          isLongDistance = true;
+          maxConfidence = Math.max(maxConfidence, 0.5);
+        }
+      } else if (centerY > 0.45 && Math.abs(centerX - 0.5) > 0.3) {
+        // Corner three pointer (wings)
+        isLongDistance = true;
+        maxConfidence = Math.max(maxConfidence, 0.55);
+      }
     }
   }
 
-  return { isLongDistance: false, confidence: 0 };
+  // Fallback to person detection if no pose data
+  if (maxConfidence === 0 && personFrame && personFrame.detections) {
+    for (const person of personFrame.detections) {
+      if (person.bbox && person.type === "person") {
+        const [x, y, w, h] = person.bbox;
+        const centerY = (y + h / 2) / (personFrame.height || 1080);
+        const centerX = (x + w / 2) / (personFrame.width || 1920);
+
+        if (centerY > 0.55) {
+          isLongDistance = true;
+          maxConfidence = Math.max(maxConfidence, 0.5);
+
+          if (centerY > 0.65) {
+            maxConfidence = Math.max(maxConfidence, 0.65);
+          }
+
+          // Bonus for corner shots
+          if (Math.abs(centerX - 0.5) > 0.3) {
+            maxConfidence = Math.max(maxConfidence, 0.6);
+          }
+        }
+      }
+    }
+  }
+
+  return { isLongDistance, confidence: maxConfidence };
 }
 
 /**
