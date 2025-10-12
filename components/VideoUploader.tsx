@@ -121,10 +121,10 @@ export function VideoUploader({ onVideoSelect }: VideoUploaderProps) {
 
           <div>
             <h3 className="text-base sm:text-lg font-semibold mb-2">
-              Upload Basketball Video
+              Upload Amateur Basketball Video
             </h3>
             <p className="text-sm sm:text-base text-muted-foreground mb-3 sm:mb-4 px-2">
-              Drag and drop your video file here, or click to browse
+              Drag and drop your amateur game video here, or click to browse
             </p>
             <div className="flex items-center justify-center gap-2 text-xs sm:text-sm text-muted-foreground">
               <Upload className="w-3 h-3 sm:w-4 sm:h-4" />
@@ -156,28 +156,29 @@ export function VideoUploader({ onVideoSelect }: VideoUploaderProps) {
             <li className="flex items-start gap-2">
               <span>•</span>
               <span>
-                <strong>Resolution:</strong> 720p or higher for clear details
+                <strong>Resolution:</strong> 1080p recommended (720p minimum)
+                for jersey detection
               </span>
             </li>
             <li className="flex items-start gap-2">
               <span>•</span>
               <span>
-                <strong>Stability:</strong> Use steady camera or tripod (avoid
-                handheld shake)
+                <strong>Camera:</strong> Use tripod or stable mount showing full
+                court
               </span>
             </li>
             <li className="flex items-start gap-2">
               <span>•</span>
               <span>
-                <strong>Lighting:</strong> Good lighting for clear player and
-                ball visibility
+                <strong>Hoop Visibility:</strong> Basketball hoop must be
+                clearly visible for score detection
               </span>
             </li>
             <li className="flex items-start gap-2">
               <span>•</span>
               <span>
-                <strong>Scoreboard:</strong> Must be visible and readable in the
-                frame
+                <strong>Lighting:</strong> Good lighting helps player and jersey
+                recognition
               </span>
             </li>
             <li className="flex items-start gap-2">

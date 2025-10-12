@@ -9,18 +9,24 @@ import { realPersonDetection } from "../models/coco-ssd";
 
 export async function detectPersons(
   frames: ImageData[],
-  model: any
+  model: any,
+  samplingRate: number = 1,
+  videoDuration: number = 0
 ): Promise<DetectionResult[]> {
   const results: DetectionResult[] = [];
 
   if (!model) {
     console.warn("No COCO-SSD model available, using fallback detection");
-    return detectPersonsFallback(frames);
+    return detectPersonsFallback(frames, samplingRate, videoDuration);
   }
+
+  // Calculate correct timestamp based on sampling rate and video duration
+  const timePerFrame =
+    videoDuration > 0 ? videoDuration / frames.length : 1 / samplingRate;
 
   for (let i = 0; i < frames.length; i++) {
     const frame = frames[i];
-    const timestamp = i * (1 / 30); // Assuming 30fps, adjust based on actual sampling rate
+    const timestamp = i * timePerFrame;
 
     try {
       const detections = await detectPersonsInFrame(frame, model);
@@ -56,6 +62,14 @@ async function detectPersonsInFrame(
   Array<{ bbox: [number, number, number, number]; confidence: number }>
 > {
   try {
+    // Validate frame dimensions
+    if (!frame || frame.width <= 0 || frame.height <= 0) {
+      console.warn(
+        "Invalid frame dimensions in detectPersonsInFrame, returning empty detections"
+      );
+      return [];
+    }
+
     // Check if model is a real detector (has real_output layer)
     if (
       model &&
@@ -89,7 +103,8 @@ async function detectPersonsInFrame(
 
     for (let i = 0; i < scores.length; i++) {
       // COCO class 0 is 'person'
-      if (classes[i] === 0 && scores[i] > 0.5) {
+      // Lowered threshold from 0.5 to 0.3 for better detection in high-quality videos
+      if (classes[i] === 0 && scores[i] > 0.3) {
         const [y1, x1, y2, x2] = boxes.slice(i * 4, (i + 1) * 4);
 
         // Convert normalized coordinates to pixel coordinates
@@ -122,13 +137,20 @@ async function detectPersonsInFrame(
   }
 }
 
-function detectPersonsFallback(frames: ImageData[]): DetectionResult[] {
+function detectPersonsFallback(
+  frames: ImageData[],
+  samplingRate: number = 1,
+  videoDuration: number = 0
+): DetectionResult[] {
   // Fallback detection using simple heuristics
   const results: DetectionResult[] = [];
 
+  const timePerFrame =
+    videoDuration > 0 ? videoDuration / frames.length : 1 / samplingRate;
+
   for (let i = 0; i < frames.length; i++) {
     const frame = frames[i];
-    const timestamp = i * (1 / 30);
+    const timestamp = i * timePerFrame;
 
     // Simple person detection using color-based heuristics
     const detections = detectPersonsInFrameFallback(frame);
@@ -305,4 +327,94 @@ function assignTeamsToClusters(
       cluster.teamId = "teamB";
     }
   }
+}
+
+/**
+ * Assign team IDs to person detections based on color clusters
+ */
+export function assignTeamsToDetections(
+  detections: DetectionResult[],
+  frames: ImageData[],
+  teamClusters: Array<{
+    centroid: { r: number; g: number; b: number };
+    samples: any[];
+    teamId: string;
+  }>
+): DetectionResult[] {
+  console.log(
+    `Assigning teams to ${detections.length} detection frames using ${teamClusters.length} clusters`
+  );
+
+  if (!teamClusters || teamClusters.length === 0) {
+    console.warn("No team clusters available, cannot assign teams");
+    return detections;
+  }
+
+  let assignedCount = 0;
+
+  for (const result of detections) {
+    const frame = frames[result.frameIndex];
+    if (!frame || !frame.data || frame.data.length === 0) continue;
+
+    for (const detection of result.detections) {
+      if (detection.teamId) continue; // Already assigned
+
+      // Extract color from this detection's bbox
+      const bbox = detection.bbox;
+      const [x, y, width, height] = bbox;
+
+      // Sample center of torso
+      const centerX = Math.floor(x + width / 2);
+      const centerY = Math.floor(y + height * 0.3);
+
+      if (
+        centerX < 0 ||
+        centerX >= frame.width ||
+        centerY < 0 ||
+        centerY >= frame.height
+      ) {
+        continue;
+      }
+
+      const pixelIndex = (centerY * frame.width + centerX) * 4;
+      if (pixelIndex + 2 >= frame.data.length) continue;
+
+      const r = frame.data[pixelIndex];
+      const g = frame.data[pixelIndex + 1];
+      const b = frame.data[pixelIndex + 2];
+
+      // Find nearest cluster
+      let nearestCluster = teamClusters[0];
+      let minDistance = Infinity;
+
+      for (const cluster of teamClusters) {
+        const distance = Math.sqrt(
+          Math.pow(r - cluster.centroid.r, 2) +
+            Math.pow(g - cluster.centroid.g, 2) +
+            Math.pow(b - cluster.centroid.b, 2)
+        );
+
+        if (distance < minDistance) {
+          minDistance = distance;
+          nearestCluster = cluster;
+        }
+      }
+
+      detection.teamId = nearestCluster.teamId;
+      assignedCount++;
+    }
+  }
+
+  console.log(`Assigned team IDs to ${assignedCount} detections`);
+
+  if (typeof self !== "undefined" && self.postMessage) {
+    self.postMessage({
+      type: "debug",
+      data: {
+        message: `✅ Team assignment: ${assignedCount} detections now have team IDs`,
+      },
+    });
+  }
+
+  return detections;
 }

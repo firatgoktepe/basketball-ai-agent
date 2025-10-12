@@ -29,9 +29,9 @@ const faqs: FAQItem[] = [
   },
   {
     category: "processing",
-    question: "Why is the scoreboard not being detected?",
+    question: "Why aren't scores being detected in my amateur video?",
     answer:
-      "Ensure you've drawn a crop region around the scoreboard. The scoreboard must be clearly visible, well-lit, and readable. Avoid reflections, overlays, or small fonts. Try adjusting the crop area to include only the score numbers.",
+      "Score detection relies on visual tracking of the ball going through the hoop. Ensure the hoop is clearly visible in your video frame. The camera should have a stable view of the basket. The system correlates shot attempts with ball-through-hoop events to determine scores.",
   },
   {
     category: "processing",
@@ -43,7 +43,13 @@ const faqs: FAQItem[] = [
     category: "results",
     question: "The detected events are inaccurate. What should I do?",
     answer:
-      "Event detection depends on video quality. For better accuracy: (1) Use higher resolution (720p+), (2) Ensure stable camera (no shaking), (3) Good lighting, (4) Clear scoreboard visibility. You can manually correct events in the results view.",
+      "Event detection depends on video quality and camera angle. For better accuracy: (1) Use higher resolution (1080p recommended), (2) Ensure stable camera with tripod, (3) Good lighting, (4) Clear view of the hoop and full court, (5) Enable Ball Detection and Pose Estimation for more accurate action recognition. You can manually correct events in the results view.",
+  },
+  {
+    category: "results",
+    question: "Jersey numbers aren't being detected. Why?",
+    answer:
+      "Jersey number detection uses OCR on player jerseys and requires: (1) High resolution video (1080p+), (2) Players facing camera so jersey is visible, (3) Good contrast between jersey color and numbers, (4) Camera close enough to read numbers. For players with undetected numbers, the system uses motion-based re-identification.",
   },
   {
     category: "results",

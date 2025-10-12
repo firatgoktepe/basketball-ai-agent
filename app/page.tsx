@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
+import Image from "next/image";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import { VideoUploader } from "@/components/VideoUploader";
 import { ProcessingControls } from "@/components/ProcessingControls";
@@ -78,9 +79,10 @@ export default function Home() {
       enableBallDetection: boolean;
       enablePoseEstimation: boolean;
       enable3ptEstimation: boolean;
+      enableJerseyNumberDetection?: boolean;
       forceMockPoseModel?: boolean;
     }) => {
-      if (!videoFile || !cropRegion) return;
+      if (!videoFile) return;
 
       setIsProcessing(true);
       setProgress({
@@ -105,11 +107,12 @@ export default function Home() {
         const result = await worker.analyzeVideo(
           {
             videoFile,
-            cropRegion,
+            cropRegion: cropRegion ? cropRegion : undefined, // Convert null to undefined
             samplingRate: options.samplingRate,
             enableBallDetection: options.enableBallDetection,
             enablePoseEstimation: options.enablePoseEstimation,
             enable3ptEstimation: options.enable3ptEstimation,
+            enableJerseyNumberDetection: options.enableJerseyNumberDetection,
             forceMockPoseModel: options.forceMockPoseModel,
           },
           (progressData) => {
@@ -179,18 +182,45 @@ export default function Home() {
   return (
     <ErrorBoundary>
       <div className="min-h-screen bg-background">
-        <div className="container mx-auto px-4 py-4 sm:py-8">
-          <header className="mb-6 sm:mb-8">
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-center mb-3 sm:mb-4">
-              Basketball Quick Stats
-            </h1>
-            <p className="text-center text-muted-foreground max-w-2xl mx-auto text-sm sm:text-base px-4">
-              AI-powered basketball game analysis tool. Upload a video, crop the
-              scoreboard, and get detailed game statistics automatically
-              extracted from the footage.
-            </p>
-          </header>
+        {/* Header with banner background */}
+        <header
+          className="relative bg-cover bg-center bg-no-repeat mb-6 sm:mb-8"
+          style={{
+            backgroundImage: "url('/assets/banner.jpeg')",
+          }}
+        >
+          {/* Dark overlay for better text readability */}
+          <div className="absolute inset-0 bg-black/40"></div>
 
+          <div className="relative container mx-auto px-4 py-8 sm:py-12">
+            <div className="flex items-center justify-center">
+              {/* Logo in top-left corner */}
+              <div className="lg:absolute sm:static left-4 top-14 ">
+                <Image
+                  src="/assets/logo.jpg"
+                  alt="Basketball Quick Stats Logo"
+                  width={160}
+                  height={160}
+                  className="rounded-lg shadow-lg"
+                />
+              </div>
+
+              {/* Centered content */}
+              <div className="text-center">
+                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-3 sm:mb-4 drop-shadow-lg">
+                  Basketball Quick Stats
+                </h1>
+                <p className="text-center text-white/90 max-w-2xl mx-auto text-sm sm:text-base px-4 drop-shadow-md hidden sm:block">
+                  AI-powered amateur basketball game analysis tool. Upload a
+                  video and get detailed player statistics, action recognition,
+                  and highlight clips automatically extracted from the footage.
+                </p>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <div className="container mx-auto px-4 py-4 sm:py-8">
           <main className="space-y-6 sm:space-y-8">
             {/* Video Upload Section */}
             {!videoFile && (
@@ -233,30 +263,12 @@ export default function Home() {
                   />
                 </div>
 
-                {/* Crop Region Status */}
-                {cropRegion && (
-                  <div className="text-center px-4">
-                    <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-100 text-green-800 rounded-lg">
-                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                      <span className="text-sm font-medium">
-                        Scoreboard region selected (
-                        {Math.round(cropRegion.width)}×
-                        {Math.round(cropRegion.height)})
-                      </span>
-                    </div>
-                    <p className="text-xs sm:text-sm text-muted-foreground mt-2">
-                      Click the crop tool button on the video to adjust the
-                      region
-                    </p>
-                  </div>
-                )}
-
                 {/* Processing Controls */}
-                {cropRegion && !isProcessing && !gameData && (
+                {!isProcessing && !gameData && (
                   <div className="max-w-2xl mx-auto px-4">
                     <ProcessingControls
                       onStartAnalysis={handleStartAnalysis}
-                      disabled={!cropRegion}
+                      disabled={false}
                     />
                   </div>
                 )}
@@ -286,6 +298,26 @@ export default function Home() {
           {/* Help Dialog */}
           <HelpDialog />
         </div>
+
+        {/* Footer with banner background */}
+        <footer
+          className="relative bg-cover bg-center bg-no-repeat mt-12"
+          style={{
+            backgroundImage: "url('/assets/banner.jpeg')",
+          }}
+        >
+          {/* Dark overlay for better text readability */}
+          <div className="absolute inset-0 bg-black/50"></div>
+
+          <div className="relative container mx-auto px-4 py-8">
+            <div className="text-center">
+              <p className="text-white/80 text-sm">
+                © {new Date().getFullYear()} Basketball Quick Stats - AI-powered
+                basketball analysis app by SPOT
+              </p>
+            </div>
+          </div>
+        </footer>
       </div>
     </ErrorBoundary>
   );

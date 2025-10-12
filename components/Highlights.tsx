@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import {
   Play,
   Pause,
@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import type { GameData, VideoFile, GameEvent } from "@/types";
+import { usePlayerFilter } from "./PlayerFilterContext";
 
 interface HighlightsProps {
   gameData: GameData;
@@ -34,6 +35,7 @@ export function Highlights({
   videoFile,
   onSeekToTime,
 }: HighlightsProps) {
+  const { selectedPlayer, clearFilter } = usePlayerFilter();
   const [selectedHighlight, setSelectedHighlight] =
     useState<HighlightVideo | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -42,45 +44,161 @@ export function Highlights({
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Create highlight videos from timeline events
-  const highlightVideos: HighlightVideo[] = (() => {
+  // Create highlight videos from timeline events or use pre-extracted highlights
+  const allHighlightVideos: HighlightVideo[] = (() => {
+    // If highlights are pre-extracted, use them
+    if (gameData.highlights && gameData.highlights.length > 0) {
+      console.log(
+        `📹 Processing ${gameData.highlights.length} pre-extracted highlights`
+      );
+
+      const processed = gameData.highlights
+        .map((highlight, index) => {
+          const event = gameData.events.find((e) => e.id === highlight.eventId);
+
+          // Validate and correct duration if needed
+          let duration = highlight.duration;
+          let endTime = highlight.endTime;
+
+          if (duration <= 0 || !isFinite(duration)) {
+            // Invalid duration, set minimum duration
+            console.warn(
+              `🔧 Correcting invalid highlight #${index}:`,
+              `\n  ID: ${highlight.id}`,
+              `\n  Original duration: ${highlight.duration}s`,
+              `\n  Start: ${highlight.startTime}s`,
+              `\n  End: ${highlight.endTime}s`,
+              `\n  Setting to 10.0s`
+            );
+            duration = 10.0;
+            endTime = highlight.startTime + duration;
+          }
+
+          return {
+            event: event || {
+              id: highlight.eventId,
+              type: highlight.eventType as any,
+              teamId: highlight.teamId,
+              timestamp: highlight.startTime,
+              confidence: 1,
+              source: "highlight",
+            },
+            startTime: highlight.startTime,
+            endTime: endTime,
+            duration: duration,
+          };
+        })
+        .filter((highlight) => {
+          const isValid = highlight.duration >= 10.0;
+          if (!isValid) {
+            console.warn(
+              `❌ Filtering out highlight with duration ${highlight.duration.toFixed(
+                2
+              )}s (minimum: 10.0s)`
+            );
+          }
+          return isValid;
+        });
+
+      console.log(
+        `✅ ${processed.length} valid highlights after processing (min 10s duration)`
+      );
+      return processed;
+    }
+
+    // Otherwise, create from significant events
+    console.log(`📝 Creating highlights from ${gameData.events.length} events`);
+
     const filteredEvents = gameData.events
       .filter(
         (event) =>
           event.type === "score" ||
+          event.type === "dunk" ||
+          event.type === "block" ||
+          event.type === "steal" ||
+          event.type === "3pt" ||
+          event.type === "assist" ||
           event.type === "shot_attempt" ||
           event.type === "missed_shot" ||
           event.type === "offensive_rebound" ||
           event.type === "defensive_rebound" ||
-          event.type === "turnover" ||
-          event.type === "steal"
+          event.type === "turnover"
       )
       .sort((a, b) => a.timestamp - b.timestamp);
 
-    return filteredEvents.map((event, index) => {
-      // Calculate duration based on time to next event or end of video
-      let endTime: number;
+    console.log(`🎯 ${filteredEvents.length} events selected for highlights`);
 
-      if (index < filteredEvents.length - 1) {
-        // Use time to next event as the end time
-        const nextEvent = filteredEvents[index + 1];
-        endTime = nextEvent.timestamp;
-      } else {
-        // For the last event, use video duration or add a reasonable buffer
-        endTime = Math.min(videoFile.duration, event.timestamp + 10);
-      }
+    const created = filteredEvents
+      .map((event, index) => {
+        // Calculate duration based on time to next event or end of video
+        // Minimum duration: 10 seconds to ensure highlights are viewable
+        const MIN_HIGHLIGHT_DURATION = 10.0;
+        let endTime: number;
 
-      const startTime = event.timestamp;
-      const duration = endTime - startTime;
+        if (index < filteredEvents.length - 1) {
+          // Use time to next event as the end time
+          const nextEvent = filteredEvents[index + 1];
+          const timeToNextEvent = nextEvent.timestamp - event.timestamp;
 
-      return {
-        event,
-        startTime,
-        endTime,
-        duration,
-      };
-    });
+          // Ensure minimum duration by either using time to next event or minimum duration
+          if (timeToNextEvent >= MIN_HIGHLIGHT_DURATION) {
+            endTime = nextEvent.timestamp;
+          } else {
+            // Events are too close, use minimum duration
+            console.log(
+              `⏱️ Events too close (${timeToNextEvent.toFixed(2)}s):`,
+              `${event.type} at ${event.timestamp.toFixed(2)}s,`,
+              `using minimum ${MIN_HIGHLIGHT_DURATION}s duration`
+            );
+            endTime = Math.min(
+              videoFile.duration,
+              event.timestamp + MIN_HIGHLIGHT_DURATION
+            );
+          }
+        } else {
+          // For the last event, use video duration or add a reasonable buffer
+          endTime = Math.min(videoFile.duration, event.timestamp + 10);
+        }
+
+        const startTime = event.timestamp;
+        const duration = endTime - startTime;
+
+        return {
+          event,
+          startTime,
+          endTime,
+          duration,
+        };
+      })
+      .filter((highlight) => {
+        const isValid = highlight.duration >= 10.0;
+        if (!isValid) {
+          console.warn(
+            `❌ Filtering out highlight:`,
+            `${highlight.event.type} at ${highlight.startTime.toFixed(2)}s,`,
+            `duration: ${highlight.duration.toFixed(2)}s (minimum: 10.0s)`
+          );
+        }
+        return isValid;
+      });
+
+    console.log(
+      `✅ ${created.length} valid highlights created from events (min 10s duration)`
+    );
+    return created;
   })();
+
+  // Filter highlights by selected player
+  const highlightVideos = useMemo(() => {
+    if (selectedPlayer.playerId && selectedPlayer.teamId) {
+      return allHighlightVideos.filter(
+        (h) =>
+          h.event.playerId === selectedPlayer.playerId &&
+          h.event.teamId === selectedPlayer.teamId
+      );
+    }
+    return allHighlightVideos;
+  }, [allHighlightVideos, selectedPlayer]);
 
   const totalHighlights = highlightVideos.length;
 
@@ -93,16 +211,23 @@ export function Highlights({
   const getEventIcon = (eventType: string) => {
     switch (eventType) {
       case "score":
+      case "dunk":
+      case "3pt":
         return <Trophy className="w-4 h-4 text-green-600" />;
       case "shot_attempt":
       case "missed_shot":
         return <Target className="w-4 h-4 text-blue-600" />;
+      case "block":
+      case "steal":
+        return <AlertTriangle className="w-4 h-4 text-red-600" />;
+      case "assist":
+      case "pass":
+        return <RotateCcw className="w-4 h-4 text-blue-600" />;
       case "offensive_rebound":
       case "defensive_rebound":
         return <RotateCcw className="w-4 h-4 text-purple-600" />;
       case "turnover":
-      case "steal":
-        return <AlertTriangle className="w-4 h-4 text-red-600" />;
+        return <AlertTriangle className="w-4 h-4 text-orange-600" />;
       default:
         return <Clock className="w-4 h-4 text-gray-600" />;
     }
@@ -111,16 +236,23 @@ export function Highlights({
   const getEventColor = (eventType: string) => {
     switch (eventType) {
       case "score":
+      case "dunk":
+      case "3pt":
         return "bg-green-50 border-green-200 text-green-800";
       case "shot_attempt":
       case "missed_shot":
+        return "bg-blue-50 border-blue-200 text-blue-800";
+      case "block":
+      case "steal":
+        return "bg-red-50 border-red-200 text-red-800";
+      case "assist":
+      case "pass":
         return "bg-blue-50 border-blue-200 text-blue-800";
       case "offensive_rebound":
       case "defensive_rebound":
         return "bg-purple-50 border-purple-200 text-purple-800";
       case "turnover":
-      case "steal":
-        return "bg-red-50 border-red-200 text-red-800";
+        return "bg-orange-50 border-orange-200 text-orange-800";
       default:
         return "bg-gray-50 border-gray-200 text-gray-800";
     }
@@ -283,6 +415,30 @@ export function Highlights({
     <div className="space-y-6">
       {/* Hidden canvas for thumbnail generation */}
       <canvas ref={canvasRef} className="hidden" />
+
+      {/* Player Filter Indicator */}
+      {selectedPlayer.playerId && (
+        <div className="bg-primary/10 border border-primary/30 rounded-lg p-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Target className="w-4 h-4 text-primary" />
+            <span className="font-medium">
+              Filtered by Player #{selectedPlayer.playerId} (
+              {
+                gameData.teams.find((t) => t.id === selectedPlayer.teamId)
+                  ?.label
+              }
+              )
+            </span>
+          </div>
+          <button
+            onClick={clearFilter}
+            className="text-primary hover:text-primary/80 transition-colors flex items-center gap-1 text-sm"
+          >
+            <X className="w-4 h-4" />
+            Clear Filter
+          </button>
+        </div>
+      )}
 
       {/* Header */}
       <div className="text-center">

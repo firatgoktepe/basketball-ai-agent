@@ -17,6 +17,7 @@ import {
   ConfidenceIndicator,
 } from "@/components/ui/ConfidenceBadge";
 import type { GameData, GameEvent } from "@/types";
+import { usePlayerFilter } from "./PlayerFilterContext";
 
 interface EventListProps {
   gameData: GameData;
@@ -29,6 +30,7 @@ export function EventList({
   onEventUpdate,
   onEventDelete,
 }: EventListProps) {
+  const { selectedPlayer, clearFilter } = usePlayerFilter();
   const [editingEvent, setEditingEvent] = useState<string | null>(null);
   const [filter, setFilter] = useState<
     "all" | "high_confidence" | "low_confidence" | "2pt_scores" | "3pt_scores"
@@ -41,16 +43,28 @@ export function EventList({
   const getEventIcon = (eventType: string) => {
     switch (eventType) {
       case "score":
+      case "dunk":
+      case "3pt":
         return <Trophy className="w-4 h-4 text-green-600" />;
       case "shot_attempt":
       case "missed_shot":
+      case "foul_shot":
         return <Target className="w-4 h-4 text-blue-600" />;
+      case "layup":
+        return <Trophy className="w-4 h-4 text-green-500" />;
       case "offensive_rebound":
       case "defensive_rebound":
         return <RotateCcw className="w-4 h-4 text-orange-600" />;
-      case "turnover":
+      case "block":
       case "steal":
         return <AlertTriangle className="w-4 h-4 text-red-600" />;
+      case "assist":
+      case "pass":
+        return <RotateCcw className="w-4 h-4 text-blue-600" />;
+      case "turnover":
+        return <AlertTriangle className="w-4 h-4 text-orange-500" />;
+      case "dribble":
+        return <Target className="w-4 h-4 text-gray-500" />;
       default:
         return <Target className="w-4 h-4 text-gray-600" />;
     }
@@ -59,16 +73,27 @@ export function EventList({
   const getEventColor = (eventType: string) => {
     switch (eventType) {
       case "score":
+      case "dunk":
+      case "3pt":
+      case "layup":
         return "bg-green-50 border-green-200";
       case "shot_attempt":
       case "missed_shot":
+      case "foul_shot":
         return "bg-blue-50 border-blue-200";
       case "offensive_rebound":
       case "defensive_rebound":
         return "bg-orange-50 border-orange-200";
-      case "turnover":
+      case "block":
       case "steal":
         return "bg-red-50 border-red-200";
+      case "assist":
+      case "pass":
+        return "bg-blue-50 border-blue-200";
+      case "turnover":
+        return "bg-orange-50 border-orange-200";
+      case "dribble":
+        return "bg-gray-50 border-gray-200";
       default:
         return "bg-gray-50 border-gray-200";
     }
@@ -81,6 +106,17 @@ export function EventList({
   };
 
   const filteredEvents = gameData.events.filter((event) => {
+    // Apply player filter first
+    if (selectedPlayer.playerId && selectedPlayer.teamId) {
+      if (
+        event.playerId !== selectedPlayer.playerId ||
+        event.teamId !== selectedPlayer.teamId
+      ) {
+        return false;
+      }
+    }
+
+    // Then apply confidence/type filters
     if (filter === "high_confidence") return event.confidence >= 0.5;
     if (filter === "low_confidence") return event.confidence < 0.5;
     if (filter === "2pt_scores")
@@ -158,6 +194,30 @@ export function EventList({
 
   return (
     <div className="space-y-6">
+      {/* Player Filter Indicator */}
+      {selectedPlayer.playerId && (
+        <div className="bg-primary/10 border border-primary/30 rounded-lg p-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Target className="w-4 h-4 text-primary" />
+            <span className="font-medium">
+              Filtered by Player #{selectedPlayer.playerId} (
+              {
+                gameData.teams.find((t) => t.id === selectedPlayer.teamId)
+                  ?.label
+              }
+              )
+            </span>
+          </div>
+          <button
+            onClick={clearFilter}
+            className="text-primary hover:text-primary/80 transition-colors flex items-center gap-1 text-sm"
+          >
+            <X className="w-4 h-4" />
+            Clear Filter
+          </button>
+        </div>
+      )}
+
       {/* Filters and Controls */}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="flex gap-2">

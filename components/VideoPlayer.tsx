@@ -3,7 +3,6 @@
 import { useRef, useEffect, useState, useCallback } from "react";
 import { Play, Pause, Volume2, VolumeX, Maximize } from "lucide-react";
 import { PersonDetectionOverlay } from "./PersonDetectionOverlay";
-import { ScoreboardCropTool } from "./ScoreboardCropTool";
 import { VideoQualityCheck } from "./VideoQualityCheck";
 import type { VideoFile, DetectionResult, GameData, CropRegion } from "@/types";
 
@@ -39,7 +38,6 @@ export function VideoPlayer({
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [showControls, setShowControls] = useState(true);
-  const [isCropModeActive, setIsCropModeActive] = useState(false);
   const [showQualityCheck, setShowQualityCheck] = useState(false);
 
   const formatTime = useCallback((time: number) => {
@@ -155,17 +153,6 @@ export function VideoPlayer({
     }
   }, [handleSeekToTime]);
 
-  const handleCropRegionChange = useCallback(
-    (region: CropRegion | null) => {
-      onCropRegionChange?.(region);
-    },
-    [onCropRegionChange]
-  );
-
-  const handleToggleCropMode = useCallback(() => {
-    setIsCropModeActive(!isCropModeActive);
-  }, [isCropModeActive]);
-
   // Debug: Log when videoFile changes
   useEffect(() => {
     console.log("🎬 VideoPlayer: videoFile changed:", videoFile);
@@ -224,14 +211,6 @@ export function VideoPlayer({
             currentTime={currentTime}
           />
         )}
-
-        {/* Scoreboard Crop Tool */}
-        <ScoreboardCropTool
-          videoElement={videoRef.current}
-          onCropRegionChange={handleCropRegionChange}
-          isActive={isCropModeActive}
-          onToggle={handleToggleCropMode}
-        />
 
         {/* Controls Overlay */}
         <div

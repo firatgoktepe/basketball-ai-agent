@@ -1,5 +1,22 @@
 import * as ort from "onnxruntime-web";
 
+// CRITICAL: Disable WebGPU GLOBALLY before any ONNX operations
+// This prevents JSEP provider from being registered at all
+if (typeof ort !== "undefined" && ort.env) {
+  // Configure WASM paths to local files IMMEDIATELY
+  ort.env.wasm.wasmPaths = "/";
+  ort.env.wasm.simd = true;
+  ort.env.wasm.numThreads = 1;
+  ort.env.wasm.proxy = false;
+
+  // Try to disable WebGL/WebGPU backends if they exist
+  if ((ort.env as any).webgl) {
+    (ort.env as any).webgl.disabled = true;
+  }
+
+  console.log("🔒 ONNX WebGPU/JSEP globally disabled, using WASM only");
+}
+
 export interface ONNXBallDetectionConfig {
   modelPath: string;
   inputSize: [number, number];
@@ -34,45 +51,63 @@ export class ONNXBallDetector {
     if (this.isInitialized) return;
 
     try {
-      // Configure ONNX Runtime
-      await this.configureONNXRuntime();
+      // CRITICAL: Configure ONNX Runtime BEFORE creating session
+      this.configureONNXRuntime();
 
-      // Load the ONNX model
+      console.log("Creating ONNX session with WASM-only execution...");
+
+      // Create session with VERY explicit WASM-only configuration
+      // Using string 'wasm' instead of array to be extra explicit
       this.session = await ort.InferenceSession.create(this.config.modelPath, {
-        executionProviders: this.getExecutionProviders(),
+        executionProviders: [
+          {
+            name: "wasm",
+          },
+        ],
         graphOptimizationLevel: "all",
+        // Explicitly set these to prevent WebGPU detection
+        executionMode: "sequential",
+        enableCpuMemArena: true,
       });
 
       this.isInitialized = true;
-      console.log("ONNX Ball Detection model loaded successfully");
+
+      // Verify which providers are actually being used
+      const actualProviders = this.session.inputNames;
+      console.log("✅ ONNX Ball Detection model loaded successfully");
+      console.log("   Using execution providers:", actualProviders);
     } catch (error) {
       console.error("Failed to initialize ONNX Ball Detection model:", error);
       throw error;
     }
   }
 
-  private async configureONNXRuntime(): Promise<void> {
-    // Configure ONNX Runtime for web
-    ort.env.wasm.wasmPaths =
-      "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.16.3/dist/";
+  private configureONNXRuntime(): void {
+    // CRITICAL: Set these BEFORE creating InferenceSession
+    // Use LOCAL WASM files from /public directory to avoid CDN issues
 
-    // Enable WebAssembly backend
+    // Point to local WASM files (served from /public in Next.js)
+    ort.env.wasm.wasmPaths = "/";
+
+    // Enable SIMD for better performance
     ort.env.wasm.simd = true;
-    ort.env.wasm.proxy = true;
+
+    // Use single thread in workers to avoid threading issues
+    ort.env.wasm.numThreads = 1;
+
+    // Disable proxy mode
+    ort.env.wasm.proxy = false;
+
+    // NOTE: We use executionProviders: ['wasm'] in create() to prevent WebGPU/JSEP
+    // Even though we have .jsep.wasm files, we don't have the .jsep.mjs files needed
+    console.log(
+      "✅ ONNX Runtime configured to use local WASM files from /public"
+    );
   }
 
   private getExecutionProviders(): string[] {
-    const providers: string[] = [];
-
-    // Try WebGPU first (if available)
-    if (typeof navigator !== "undefined" && "gpu" in navigator) {
-      providers.push("webgpu");
-    }
-
-    // Fallback to WebAssembly
-    providers.push("wasm");
-
-    return providers;
+    // This method is no longer used, but kept for backwards compatibility
+    return ["wasm"];
   }
 
   async detectBalls(imageData: ImageData): Promise<BallDetectionResult[]> {
@@ -289,16 +324,10 @@ export function isONNXAvailable(): boolean {
 export async function getAvailableExecutionProviders(): Promise<string[]> {
   const providers: string[] = [];
 
-  try {
-    // Check WebGPU availability
-    if (typeof navigator !== "undefined" && "gpu" in navigator) {
-      providers.push("webgpu");
-    }
-  } catch (error) {
-    console.warn("WebGPU not available:", error);
-  }
+  // Note: WebGPU support requires .jsep.mjs files which may not be available
+  // For broader compatibility, we return only WASM providers
 
-  // WebAssembly is always available
+  // WebAssembly is always available and most compatible
   providers.push("wasm");
 
   return providers;

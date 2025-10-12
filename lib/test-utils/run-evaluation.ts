@@ -151,19 +151,33 @@ async function testAnalyze(videoPath: string, options: any): Promise<GameData> {
         points: teamAPoints,
         twoPointScores: Math.floor(teamAPoints * 0.7), // Estimate 70% are 2-pointers
         threePointScores: Math.floor(teamAPoints * 0.3), // Estimate 30% are 3-pointers
+        foulShots: Math.floor(teamAPoints * 0.1), // Estimate 10% are foul shots
         shotAttempts: teamAShotAttempts,
         offRebounds: Math.floor(teamAShotAttempts * 0.3),
         defRebounds: Math.floor(teamAShotAttempts * 0.4),
         turnovers: Math.floor(teamAShotAttempts * 0.2),
+        blocks: Math.floor(teamAShotAttempts * 0.15),
+        dunks: Math.floor(teamAShotAttempts * 0.1),
+        assists: Math.floor(teamAShotAttempts * 0.5),
+        passes: Math.floor(teamAShotAttempts * 2),
+        dribbles: Math.floor(teamAShotAttempts * 3),
+        players: [], // No per-player breakdown in test data
       },
       teamB: {
         points: teamBPoints,
         twoPointScores: Math.floor(teamBPoints * 0.7), // Estimate 70% are 2-pointers
         threePointScores: Math.floor(teamBPoints * 0.3), // Estimate 30% are 3-pointers
+        foulShots: Math.floor(teamBPoints * 0.1), // Estimate 10% are foul shots
         shotAttempts: teamBShotAttempts,
         offRebounds: Math.floor(teamBShotAttempts * 0.3),
         defRebounds: Math.floor(teamBShotAttempts * 0.4),
         turnovers: Math.floor(teamBShotAttempts * 0.2),
+        blocks: Math.floor(teamBShotAttempts * 0.15),
+        dunks: Math.floor(teamBShotAttempts * 0.1),
+        assists: Math.floor(teamBShotAttempts * 0.5),
+        passes: Math.floor(teamBShotAttempts * 2),
+        dribbles: Math.floor(teamBShotAttempts * 3),
+        players: [], // No per-player breakdown in test data
       },
     },
   };

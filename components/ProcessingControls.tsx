@@ -11,6 +11,7 @@ interface ProcessingControlsProps {
     enableBallDetection: boolean;
     enablePoseEstimation: boolean;
     enable3ptEstimation: boolean;
+    enableJerseyNumberDetection?: boolean;
     forceMockPoseModel?: boolean;
   }) => void;
   disabled?: boolean;
@@ -21,9 +22,11 @@ export function ProcessingControls({
   disabled = false,
 }: ProcessingControlsProps) {
   const [samplingRate, setSamplingRate] = useState(1);
-  const [enableBallDetection, setEnableBallDetection] = useState(false);
-  const [enablePoseEstimation, setEnablePoseEstimation] = useState(false);
+  const [enableBallDetection, setEnableBallDetection] = useState(true); // Default true for amateur videos
+  const [enablePoseEstimation, setEnablePoseEstimation] = useState(true); // Default true for amateur videos
   const [enable3ptEstimation, setEnable3ptEstimation] = useState(false);
+  const [enableJerseyNumberDetection, setEnableJerseyNumberDetection] =
+    useState(true); // Default true for player tracking
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [forceMockPoseModel, setForceMockPoseModel] = useState(false);
 
@@ -33,6 +36,7 @@ export function ProcessingControls({
       enableBallDetection,
       enablePoseEstimation,
       enable3ptEstimation,
+      enableJerseyNumberDetection,
       forceMockPoseModel,
     });
   };
@@ -53,7 +57,7 @@ export function ProcessingControls({
           Analysis Settings
         </h3>
         <p className="text-sm sm:text-base text-muted-foreground px-4">
-          Configure the analysis parameters for your video
+          Configure detection and tracking options for amateur basketball video
         </p>
       </div>
 
@@ -101,7 +105,8 @@ export function ProcessingControls({
               (
               {enableBallDetection ||
               enablePoseEstimation ||
-              enable3ptEstimation
+              enable3ptEstimation ||
+              enableJerseyNumberDetection
                 ? "Enabled"
                 : "Disabled"}
               )
@@ -165,14 +170,37 @@ export function ProcessingControls({
                 />
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">3-Point Estimation</span>
+                    <span className="font-medium">3-Point Line Detection</span>
                     <Tooltip
-                      content="Attempts to detect 3-point shots by estimating court geometry and shooter position. Currently experimental with lower accuracy. Requires clear court view."
+                      content="Uses camera calibration to detect the 3-point line and distinguish 2-point from 3-point shots. Requires clear court view and stable camera angle."
                       icon="help"
                     />
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    Detect 3-point shot attempts (experimental)
+                    Detect 3-point line for accurate shot classification
+                  </div>
+                </div>
+              </label>
+
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={enableJerseyNumberDetection}
+                  onChange={(e) =>
+                    setEnableJerseyNumberDetection(e.target.checked)
+                  }
+                  className="rounded"
+                />
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">Jersey Number Detection</span>
+                    <Tooltip
+                      content="Identifies player jersey numbers for per-player statistics and tracking. Uses OCR on jersey regions with motion-based re-identification when OCR fails."
+                      icon="help"
+                    />
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Track individual players by jersey number
                   </div>
                 </div>
               </label>

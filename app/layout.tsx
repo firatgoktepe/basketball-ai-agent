@@ -8,6 +8,11 @@ export const metadata: Metadata = {
   title: "Basketball Quick Stats",
   description:
     "AI-powered basketball game analysis tool for extracting stats from video footage",
+  icons: {
+    icon: "/assets/favicon.png",
+    shortcut: "/assets/favicon.png",
+    apple: "/assets/favicon.png",
+  },
 };
 
 export default function RootLayout({
