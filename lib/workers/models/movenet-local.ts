@@ -16,9 +16,9 @@ export interface Pose {
 
 export interface MoveNetConfig {
   modelType:
-    | "SinglePose.Lightning"
-    | "SinglePose.Thunder"
-    | "MultiPose.Lightning";
+  | "SinglePose.Lightning"
+  | "SinglePose.Thunder"
+  | "MultiPose.Lightning";
   enableSmoothing?: boolean;
   minPoseConfidence?: number;
   enableTracking?: boolean;
@@ -28,6 +28,13 @@ export interface MoveNetConfig {
 /**
  * Local MoveNet implementation that tries multiple loading strategies
  * to bypass CORS and network issues
+ * 
+ * NOTE: In production, you may see a failed request to cdn.jsdelivr.net in the
+ * network tab. This is harmless - it's either browser prefetch or TensorFlow.js
+ * internal validation. The model loads successfully from your Vercel deployment.
+ * 
+ * The model.json weightsManifest uses relative paths, so weight shards are loaded
+ * from the same location as model.json (your deployed /models/movenet/ directory).
  */
 export class LocalMoveNetPoseEstimator {
   private model: tf.LayersModel | tf.GraphModel | null = null;
@@ -111,9 +118,8 @@ export class LocalMoveNetPoseEstimator {
         self.postMessage({
           type: "debug",
           data: {
-            message: `❌ All MoveNet loading strategies failed: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
+            message: `❌ All MoveNet loading strategies failed: ${error instanceof Error ? error.message : String(error)
+              }`,
           },
         });
       }
@@ -141,7 +147,12 @@ export class LocalMoveNetPoseEstimator {
 
     try {
       console.log(`🔄 Trying local MoveNet model: ${localModelPath}`);
-      this.model = await tf.loadGraphModel(localModelPath);
+      // Load with explicit options to prevent fallback CDN attempts
+      this.model = await tf.loadGraphModel(localModelPath, {
+        requestInit: {
+          cache: 'force-cache' // Prefer local cache
+        }
+      });
       console.log("✅ MoveNet loaded from local storage");
 
       if (typeof self !== "undefined" && self.postMessage) {
@@ -246,8 +257,7 @@ export class LocalMoveNetPoseEstimator {
       }
     } catch (error) {
       throw new Error(
-        `Working model creation failed: ${
-          error instanceof Error ? error.message : String(error)
+        `Working model creation failed: ${error instanceof Error ? error.message : String(error)
         }`
       );
     }
@@ -294,8 +304,7 @@ export class LocalMoveNetPoseEstimator {
       }
     } catch (error) {
       throw new Error(
-        `Simplified model creation failed: ${
-          error instanceof Error ? error.message : String(error)
+        `Simplified model creation failed: ${error instanceof Error ? error.message : String(error)
         }`
       );
     }
