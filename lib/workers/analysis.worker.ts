@@ -50,13 +50,13 @@ async function initializeModels(forceMockPoseModel = false) {
     // Load core models
     const moveNetConfig = forceMockPoseModel
       ? {
-          modelType: "SinglePose.Lightning" as const,
-          forceMock: true,
-        }
+        modelType: "SinglePose.Lightning" as const,
+        forceMock: true,
+      }
       : {
-          modelType: "SinglePose.Lightning" as const,
-          forceMock: false,
-        };
+        modelType: "SinglePose.Lightning" as const,
+        forceMock: false,
+      };
 
     const [coco, moveNet] = await Promise.all([
       loadCocoSSD(),
@@ -65,31 +65,13 @@ async function initializeModels(forceMockPoseModel = false) {
     cocoModel = coco;
     moveNetModel = moveNet;
 
-    // Try to load ONNX ball detector if available AND model file exists
-    // Note: The model file /models/ball-detection.onnx must be manually added
-    // For now, we skip ONNX and use HSV-based ball detection (works well for basketball)
-    if (isONNXAvailable()) {
-      try {
-        // Check if model exists by attempting to fetch it first
-        const modelCheck = await fetch("/models/ball-detection.onnx", {
-          method: "HEAD",
-        });
-
-        if (modelCheck.ok) {
-          onnxBallDetector = await loadONNXBallDetector();
-          console.log("✅ ONNX ball detector loaded successfully");
-        } else {
-          console.log(
-            "ℹ️ ONNX ball model not found - using HSV ball detection (recommended for basketball)"
-          );
-        }
-      } catch (error) {
-        console.log(
-          "ℹ️ ONNX ball detector not available - using HSV fallback (works well for basketball)"
-        );
-        // This is fine - HSV detection works well for basketballs (orange color)
-      }
-    }
+    // ONNX ball detector is DISABLED - we use HSV-based ball detection instead
+    // HSV detection works better for basketballs (orange color) and doesn't require
+    // an external model file or network requests
+    console.log(
+      "ℹ️ Using HSV-based ball detection (optimized for basketball, no model download required)"
+    );
+    onnxBallDetector = null;
 
     isInitialized = true;
   } catch (error) {
@@ -287,9 +269,8 @@ async function analyzeVideo(options: any) {
       self.postMessage({
         type: "debug",
         data: {
-          message: `✅ Team clustering complete: ${
-            teamClusters?.length || 0
-          } teams`,
+          message: `✅ Team clustering complete: ${teamClusters?.length || 0
+            } teams`,
         },
       });
     } catch (error) {
