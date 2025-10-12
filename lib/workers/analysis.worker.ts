@@ -50,13 +50,13 @@ async function initializeModels(forceMockPoseModel = false) {
     // Load core models
     const moveNetConfig = forceMockPoseModel
       ? {
-        modelType: "SinglePose.Lightning" as const,
-        forceMock: true,
-      }
+          modelType: "SinglePose.Lightning" as const,
+          forceMock: true,
+        }
       : {
-        modelType: "SinglePose.Lightning" as const,
-        forceMock: false,
-      };
+          modelType: "SinglePose.Lightning" as const,
+          forceMock: false,
+        };
 
     const [coco, moveNet] = await Promise.all([
       loadCocoSSD(),
@@ -269,8 +269,9 @@ async function analyzeVideo(options: any) {
       self.postMessage({
         type: "debug",
         data: {
-          message: `✅ Team clustering complete: ${teamClusters?.length || 0
-            } teams`,
+          message: `✅ Team clustering complete: ${
+            teamClusters?.length || 0
+          } teams`,
         },
       });
     } catch (error) {
