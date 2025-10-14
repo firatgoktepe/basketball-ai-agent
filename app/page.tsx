@@ -195,13 +195,16 @@ export default function Home() {
           <div className="relative container mx-auto px-4 py-8 sm:py-12">
             <div className="flex items-center justify-center">
               {/* Logo in top-left corner */}
-              <div className="lg:absolute sm:static left-4 top-14 ">
+              <div
+                className="lg:absolute sm:static left-4 top-14"
+                onClick={() => (window.location.href = "/")}
+              >
                 <Image
                   src="/assets/logo.jpg"
                   alt="Basketball Quick Stats Logo"
                   width={160}
                   height={160}
-                  className="rounded-lg shadow-lg"
+                  className="rounded-lg shadow-lg cursor-pointer"
                 />
               </div>
 
