@@ -47,10 +47,26 @@ export async function detectBall(
   const framesToProcess = Math.ceil(frames.length / frameStep);
 
   console.log(
-    `[Ball Detection] Starting optimized detection on ${framesToProcess} frames (skipping ${
-      frameStep - 1
-    } out of ${frameStep} frames)`
+    `[Ball Detection] ========== BALL DETECTION START ==========`
   );
+  console.log(
+    `[Ball Detection] Total frames: ${frames.length}, Processing: ${framesToProcess} (every ${frameStep} frames)`
+  );
+  console.log(
+    `[Ball Detection] Detection method: ${onnxDetector ? 'ONNX Model' : 'HSV Color-Based'}`
+  );
+  console.log(
+    `[Ball Detection] Frame dimensions: ${frames[0]?.width || 'unknown'}x${frames[0]?.height || 'unknown'}`
+  );
+
+  if (typeof self !== "undefined" && self.postMessage) {
+    self.postMessage({
+      type: "debug",
+      data: {
+        message: `🔍 Ball Detection: ${onnxDetector ? 'Using ONNX model' : 'Using HSV color detection (orange)'}, processing ${framesToProcess} frames`,
+      },
+    });
+  }
 
   const timePerFrame =
     videoDuration > 0 ? videoDuration / frames.length : 1 / samplingRate;
@@ -107,16 +123,16 @@ export async function detectBall(
           confidence: result.confidence,
           trajectory: tracker.lastPosition
             ? {
-                x:
-                  result.bbox[0] * scaleFactor +
-                  (result.bbox[2] * scaleFactor) / 2,
-                y:
-                  result.bbox[1] * scaleFactor +
-                  (result.bbox[3] * scaleFactor) / 2,
-                velocity: tracker.velocity
-                  ? Math.sqrt(tracker.velocity.x ** 2 + tracker.velocity.y ** 2)
-                  : 0,
-              }
+              x:
+                result.bbox[0] * scaleFactor +
+                (result.bbox[2] * scaleFactor) / 2,
+              y:
+                result.bbox[1] * scaleFactor +
+                (result.bbox[3] * scaleFactor) / 2,
+              velocity: tracker.velocity
+                ? Math.sqrt(tracker.velocity.x ** 2 + tracker.velocity.y ** 2)
+                : 0,
+            }
             : undefined,
         }));
       } catch (error) {
@@ -165,13 +181,23 @@ export async function detectBall(
     });
   }
 
-  console.log(
-    `[Ball Detection] Completed detection on ${
-      frames.length
-    } frames, found ball in ${
-      results.filter((r) => r.detections.length > 0).length
-    } frames`
-  );
+  const framesWithBall = results.filter((r) => r.detections.length > 0).length;
+  const totalBalls = results.reduce((sum, r) => sum + r.detections.length, 0);
+
+  console.log(`[Ball Detection] ========== BALL DETECTION COMPLETE ==========`);
+  console.log(`[Ball Detection] Processed ${frames.length} frames`);
+  console.log(`[Ball Detection] Found ball in ${framesWithBall} frames (${((framesWithBall / frames.length) * 100).toFixed(1)}%)`);
+  console.log(`[Ball Detection] Total detections: ${totalBalls}`);
+  console.log(`[Ball Detection] ================================================`);
+
+  if (typeof self !== "undefined" && self.postMessage) {
+    self.postMessage({
+      type: "debug",
+      data: {
+        message: `📊 Ball Detection Complete: ${framesWithBall}/${frames.length} frames have ball (${totalBalls} total detections)`,
+      },
+    });
+  }
 
   return results;
 }
@@ -185,7 +211,14 @@ function detectBallInFrame(
 
   // Validate data
   if (!data || data.length === 0) {
+    console.warn('[Ball Detection] Invalid frame data - skipping');
     return detections;
+  }
+
+  // Debug: Log frame info for first few frames
+  const isFirstFrame = Math.random() < 0.01; // Log 1% of frames
+  if (isFirstFrame) {
+    console.log(`[Ball Detection] Processing frame: ${width}x${height}, data length: ${data.length}`);
   }
 
   // PERFORMANCE OPTIMIZATION: Focus on region of interest (middle 70% of frame)
@@ -196,18 +229,39 @@ function detectBallInFrame(
   const yStart = Math.floor(height * roiMargin);
   const yEnd = Math.floor(height * (1 - roiMargin));
 
-  // HSV color range for basketball - MUCH more permissive for amateur videos
+  // HSV color range for basketball - EXTREMELY permissive for all lighting conditions
+  // This allows detection in various lighting: indoor, outdoor, shadows, bright lights
   const orangeRange = {
-    hMin: 0, // Extended to include red-orange
-    hMax: 40, // Extended to include yellow-orange
-    sMin: 30, // Much lower saturation (was 100)
+    hMin: 0, // Include full red-orange-yellow spectrum
+    hMax: 50, // Extended further to yellow-orange
+    sMin: 20, // Very low saturation to catch washed-out balls
     sMax: 255,
-    vMin: 50, // Lower brightness threshold (was 100)
+    vMin: 30, // Very low brightness for dark/shadowed balls
     vMax: 255,
   };
 
+  // Additional color ranges for different lighting conditions
+  const alternativeRanges = [
+    // Brown/darker basketballs (old or outdoor)
+    { hMin: 10, hMax: 30, sMin: 40, sMax: 255, vMin: 40, vMax: 200 },
+    // Bright/overexposed basketballs
+    { hMin: 15, hMax: 40, sMin: 30, sMax: 180, vMin: 150, vMax: 255 },
+  ];
+
+  // Log HSV ranges being used (only once per batch)
+  if (Math.random() < 0.01) {
+    console.log(`[Ball Detection] Using HSV ranges:`, {
+      primary: orangeRange,
+      alternatives: alternativeRanges.length,
+    });
+  }
+
   // Convert RGB to HSV and find orange regions
   const orangePixels: { x: number; y: number }[] = [];
+
+  // Debug: Sample colors for diagnostics
+  const colorSamples: any[] = [];
+  const sampleInterval = Math.floor((yEnd - yStart) / 10); // Sample 10 points
 
   // PERFORMANCE: Increase sampling step - check fewer pixels
   const step = width > 1000 ? 6 : 4; // Sample every 6th pixel for HD (was 4), 4th for smaller (was 2)
@@ -227,7 +281,26 @@ function detectBallInFrame(
 
       const hsv = rgbToHsv(r, g, b);
 
+      // Sample colors for debugging (every N rows)
+      if (colorSamples.length < 20 && y % sampleInterval === 0 && x % sampleInterval === 0) {
+        colorSamples.push({ r, g, b, h: hsv.h, s: hsv.s, v: hsv.v });
+      }
+
+      // Check primary orange range and alternative ranges
+      let matchedRange = false;
       if (isInOrangeRange(hsv, orangeRange)) {
+        matchedRange = true;
+      } else {
+        // Try alternative ranges
+        for (const altRange of alternativeRanges) {
+          if (isInOrangeRange(hsv, altRange)) {
+            matchedRange = true;
+            break;
+          }
+        }
+      }
+
+      if (matchedRange) {
         orangePixels.push({ x, y });
 
         // PERFORMANCE: Lower limit to stop early
@@ -244,52 +317,210 @@ function detectBallInFrame(
     }
   }
 
+  // Check if we hit the limit - this means TOO MUCH orange (court, jerseys, etc.)
+  if (orangePixels.length >= 3000) {
+    console.warn(`[Ball Detection] ⚠️ Hit 3000 pixel limit - too much orange detected (likely court/jerseys)`);
+    if (typeof self !== "undefined" && self.postMessage) {
+      self.postMessage({
+        type: "debug",
+        data: {
+          message: `⚠️ Too much orange detected (${orangePixels.length} pixels) - likely background/jerseys. Filtering for concentrated regions...`,
+        },
+      });
+    }
+
+    // Filter to only keep pixels in densest regions
+    orangePixels.length = 0; // Clear and rebuild with stricter filtering
+
+    // Use much stricter HSV ranges when we have too much orange
+    const strictRange = {
+      hMin: 10,
+      hMax: 30,
+      sMin: 80,  // Much higher saturation
+      sMax: 255,
+      vMin: 100, // Higher brightness
+      vMax: 255,
+    };
+
+    for (let y = yStart; y < yEnd; y += step) {
+      for (let x = xStart; x < xEnd; x += step) {
+        const index = (y * width + x) * 4;
+        if (index + 2 >= data.length) continue;
+
+        const r = data[index];
+        const g = data[index + 1];
+        const b = data[index + 2];
+        const hsv = rgbToHsv(r, g, b);
+
+        if (isInOrangeRange(hsv, strictRange)) {
+          orangePixels.push({ x, y });
+          if (orangePixels.length > 500) break; // Much lower limit
+        }
+      }
+      if (orangePixels.length > 500) break;
+    }
+
+    console.log(`[Ball Detection] After strict filtering: ${orangePixels.length} orange pixels`);
+  }
+
+  // ALWAYS log this for debugging - use postMessage to ensure it appears
+  if (typeof self !== "undefined" && self.postMessage) {
+    self.postMessage({
+      type: "debug",
+      data: {
+        message: `🔍 Ball Frame Analysis: Found ${orangePixels.length} orange pixels (${orangePixels.length >= 3000 ? 'FILTERED' : 'good'})`,
+      },
+    });
+  }
+
+  // Log color samples for first frame to help debug
+  if (colorSamples.length > 0 && orangePixels.length > 0 && orangePixels.length < 1000) {
+    console.log(`[Ball Detection] Color samples:`, colorSamples.slice(0, 3));
+    console.log(`[Ball Detection] Found ${orangePixels.length} orange pixels in ${width}x${height} frame`);
+  }
+
   // PERFORMANCE: Early exit if too few orange pixels
-  if (orangePixels.length < 15) {
+  // Further lowered threshold from 8 to 5 for maximum sensitivity
+  if (orangePixels.length < 5) {
+    if (orangePixels.length > 0) {
+      console.log(`[Ball Detection] Only ${orangePixels.length} orange pixels found (min: 5) - frame likely has no ball`);
+      if (typeof self !== "undefined" && self.postMessage) {
+        self.postMessage({
+          type: "debug",
+          data: {
+            message: `⚠️ Frame has ${orangePixels.length} orange pixels (need 5+)`,
+          },
+        });
+      }
+    }
     return detections; // Not enough orange pixels to form a ball
+  }
+
+  // Log if we found orange pixels
+  console.log(`[Ball Detection] ✅ Found ${orangePixels.length} orange pixels - clustering...`);
+  if (typeof self !== "undefined" && self.postMessage) {
+    self.postMessage({
+      type: "debug",
+      data: {
+        message: `✅ Found ${orangePixels.length} orange pixels - attempting clustering`,
+      },
+    });
   }
 
   // Cluster orange pixels into potential ball regions
   const clusters = clusterOrangePixels(orangePixels, width, height);
 
+  console.log(`[Ball Detection] Clustering produced ${clusters.length} clusters from ${orangePixels.length} pixels`);
+  if (typeof self !== "undefined" && self.postMessage) {
+    self.postMessage({
+      type: "debug",
+      data: {
+        message: `🔧 Clustering: ${clusters.length} clusters from ${orangePixels.length} pixels`,
+      },
+    });
+  }
+
   // PERFORMANCE: Early exit if no clusters
   if (clusters.length === 0) {
+    console.log(`[Ball Detection] ⚠️ No clusters formed from ${orangePixels.length} orange pixels`);
     return detections;
   }
 
   for (const cluster of clusters) {
     // PERFORMANCE: Quick size filter before expensive circularity check
     const size = cluster.length;
-    if (size < 20 || size > 2000) continue;
+
+    // Further lowered minimum size from 20 to 10
+    if (size < 10 || size > 2000) {
+      if (size < 10) {
+        console.log(`[Ball Detection] Cluster too small: ${size} pixels (min: 10)`);
+      }
+      continue;
+    }
 
     // Check if cluster has circular characteristics
     const circularity = calculateCircularity(cluster);
 
-    // Filter by circularity
-    if (circularity > 0.55) {
-      // Slightly more lenient (was 0.6)
+    // Log every cluster analysis
+    if (typeof self !== "undefined" && self.postMessage) {
+      self.postMessage({
+        type: "debug",
+        data: {
+          message: `🔍 Cluster #${clusters.length + 1}: size=${size}, circularity=${circularity.toFixed(3)}`,
+        },
+      });
+    }
+
+    // Filter by circularity - EXTREMELY lenient threshold for real-world basketballs
+    if (circularity > 0.28) {
+      // Lowered from 0.35 to accept slightly irregular shapes (shadows, sampling artifacts)
       const bbox = calculateBoundingBox(cluster);
       const confidence = calculateBallConfidence(cluster, circularity, tracker);
 
-      if (confidence > 0.3) {
+      console.log(`[Ball Detection] Circular cluster: size=${size}, circularity=${circularity.toFixed(3)}, confidence=${confidence.toFixed(3)}`);
+
+      if (typeof self !== "undefined" && self.postMessage) {
+        self.postMessage({
+          type: "debug",
+          data: {
+            message: `🎯 Circular cluster: confidence=${confidence.toFixed(3)} (need > 0.20)`,
+          },
+        });
+      }
+
+      // Lowered confidence threshold from 0.25 to 0.20
+      if (confidence > 0.20) {
         detections.push({
           bbox,
           confidence,
           trajectory: tracker.lastPosition
             ? {
-                x: bbox[0] + bbox[2] / 2,
-                y: bbox[1] + bbox[3] / 2,
-                velocity: tracker.velocity
-                  ? Math.sqrt(tracker.velocity.x ** 2 + tracker.velocity.y ** 2)
-                  : 0,
-              }
+              x: bbox[0] + bbox[2] / 2,
+              y: bbox[1] + bbox[3] / 2,
+              velocity: tracker.velocity
+                ? Math.sqrt(tracker.velocity.x ** 2 + tracker.velocity.y ** 2)
+                : 0,
+            }
             : undefined,
         });
+
+        console.log(`[Ball Detection] ✅ Ball candidate ACCEPTED: confidence=${confidence.toFixed(3)}, circularity=${circularity.toFixed(3)}, size=${size}`);
+
+        if (typeof self !== "undefined" && self.postMessage) {
+          self.postMessage({
+            type: "debug",
+            data: {
+              message: `🏀 Ball detected: confidence=${confidence.toFixed(3)}, size=${size}px`,
+            },
+          });
+        }
 
         // PERFORMANCE: If we found a high-confidence ball, stop looking
         if (confidence > 0.7) {
           break;
         }
+      } else {
+        console.log(`[Ball Detection] ❌ Cluster rejected: confidence too low (${confidence.toFixed(3)} < 0.20)`);
+
+        if (typeof self !== "undefined" && self.postMessage) {
+          self.postMessage({
+            type: "debug",
+            data: {
+              message: `❌ Rejected: confidence ${confidence.toFixed(3)} < 0.20`,
+            },
+          });
+        }
+      }
+    } else {
+      console.log(`[Ball Detection] ❌ Cluster rejected: not circular enough (${circularity.toFixed(3)} < 0.28)`);
+
+      if (typeof self !== "undefined" && self.postMessage) {
+        self.postMessage({
+          type: "debug",
+          data: {
+            message: `❌ Rejected: circularity ${circularity.toFixed(3)} < 0.28`,
+          },
+        });
       }
     }
   }
@@ -350,17 +581,33 @@ function clusterOrangePixels(
 ): { x: number; y: number }[][] {
   const clusters: { x: number; y: number }[][] = [];
   const visited = new Set<string>();
-  const maxDistance = 30; // Maximum distance between pixels in same cluster
-  const maxClusters = 15; // Reduced from 20 - only keep top candidates
+  const maxClusters = 15; // Only keep top candidates
   const maxClusterSize = 500; // Prevent huge clusters
-  const maxIterations = 5000; // Reduced from 10000
+  const maxIterations = 10000; // Increased for better clustering
 
-  // PERFORMANCE: Use spatial hashing for faster neighbor lookup
+  // CRITICAL FIX: Since we sample at step=6, we need to search in a larger neighborhood
+  // Otherwise, neighboring orange pixels won't be found!
+  const searchRadius = 8; // Search 8 pixels in each direction (accounts for step=6)
+
+  // Build spatial index for faster neighbor lookup
   const pixelSet = new Set(pixels.map((p) => `${p.x},${p.y}`));
   let iterations = 0;
 
+  console.log(`[Ball Detection] Starting clustering: ${pixels.length} pixels, search radius: ${searchRadius}`);
+
+  // Optimize: if too many pixels, use larger step in neighbor search
+  const neighborStep = pixels.length > 1000 ? 2 : 1; // Skip some positions if too many pixels
+
   for (const pixel of pixels) {
-    if (clusters.length >= maxClusters) break;
+    if (clusters.length >= maxClusters) {
+      console.log(`[Ball Detection] Reached max clusters (${maxClusters}), stopping`);
+      break;
+    }
+
+    if (iterations >= maxIterations) {
+      console.warn(`[Ball Detection] Hit max iterations (${maxIterations}), stopping`);
+      break;
+    }
 
     const key = `${pixel.x},${pixel.y}`;
     if (visited.has(key)) continue;
@@ -378,14 +625,19 @@ function clusterOrangePixels(
       const current = queue.shift()!;
       cluster.push(current);
 
-      // PERFORMANCE: Check only immediate neighbors (reduced search space)
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
+      // FIXED: Search in larger neighborhood to account for pixel sampling step
+      // Use optimized step to reduce search space
+      for (let dy = -searchRadius; dy <= searchRadius; dy += neighborStep) {
+        for (let dx = -searchRadius; dx <= searchRadius; dx += neighborStep) {
           if (dx === 0 && dy === 0) continue; // Skip self
 
           const nx = current.x + dx;
           const ny = current.y + dy;
           const neighborKey = `${nx},${ny}`;
+
+          // Check distance to ensure we're within reasonable proximity
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          if (distance > searchRadius) continue;
 
           if (
             nx >= 0 &&
@@ -402,10 +654,37 @@ function clusterOrangePixels(
       }
     }
 
-    if (cluster.length > 10 && cluster.length < maxClusterSize) {
-      // Minimum cluster size, max cluster size
+    // Lowered minimum cluster size from 10 to 5
+    if (cluster.length >= 5 && cluster.length < maxClusterSize) {
       clusters.push(cluster);
+      console.log(`[Ball Detection] ✅ Formed cluster #${clusters.length} with ${cluster.length} pixels`);
+
+      // Log first few clusters via postMessage
+      if (clusters.length <= 3 && typeof self !== "undefined" && self.postMessage) {
+        self.postMessage({
+          type: "debug",
+          data: {
+            message: `✅ Cluster #${clusters.length}: ${cluster.length} pixels`,
+          },
+        });
+      }
+    } else if (cluster.length < 5) {
+      // Only log occasionally to avoid spam
+      if (Math.random() < 0.1) {
+        console.log(`[Ball Detection] Cluster too small: ${cluster.length} pixels (min: 5)`);
+      }
     }
+  }
+
+  console.log(`[Ball Detection] Clustering complete: ${clusters.length} clusters formed from ${pixels.length} pixels (${iterations} iterations)`);
+
+  if (typeof self !== "undefined" && self.postMessage) {
+    self.postMessage({
+      type: "debug",
+      data: {
+        message: `🔧 Clustering result: ${clusters.length} clusters from ${pixels.length} pixels`,
+      },
+    });
   }
 
   return clusters;
@@ -419,8 +698,8 @@ function calculateCircularity(cluster: { x: number; y: number }[]): number {
   const sampledCluster =
     cluster.length > sampleSize
       ? cluster.filter(
-          (_, idx) => idx % Math.ceil(cluster.length / sampleSize) === 0
-        )
+        (_, idx) => idx % Math.ceil(cluster.length / sampleSize) === 0
+      )
       : cluster;
 
   // Calculate centroid
@@ -494,7 +773,7 @@ function calculateBallConfidence(
 
     const distance = Math.sqrt(
       (currentCenter.x - expectedPosition.x) ** 2 +
-        (currentCenter.y - expectedPosition.y) ** 2
+      (currentCenter.y - expectedPosition.y) ** 2
     );
 
     const motionFactor = Math.max(0, 1 - distance / 50); // Within 50 pixels

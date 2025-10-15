@@ -25,6 +25,15 @@ const POSE_KEYPOINT_NAMES = [
   "right_ankle",
 ];
 
+function getPoseKeypoint(
+  pose: PoseResult["poses"][0],
+  keypointName: string
+): { x: number; y: number; confidence: number } | undefined {
+  const index = POSE_KEYPOINT_NAMES.indexOf(keypointName);
+  if (index === -1) return undefined;
+  return pose.keypoints[index];
+}
+
 /**
  * Detect blocks: Defensive player interfering with shot attempt
  * Looks for defensive player with raised arms near shooter
@@ -39,82 +48,62 @@ export function detectBlocks(
   for (const shot of shotAttempts) {
     if (shot.type !== "shot_attempt") continue;
 
-    // Find poses near shot time
     const nearbyPoses = poseDetections.filter(
-      (p) => Math.abs(p.timestamp - shot.timestamp) < 0.3
+      (p) => Math.abs(p.timestamp - shot.timestamp) < 0.5
     );
 
     for (const poseFrame of nearbyPoses) {
       for (const pose of poseFrame.poses) {
-        // Skip if same team as shooter
         if (pose.teamId === shot.teamId) continue;
 
-        // Check for defensive stance: arms raised high
-        const leftWrist = pose.keypoints[9]; // left_wrist
-        const rightWrist = pose.keypoints[10]; // right_wrist
-        const leftShoulder = pose.keypoints[5]; // left_shoulder
-        const rightShoulder = pose.keypoints[6]; // right_shoulder
+        const leftWrist = getPoseKeypoint(pose, "left_wrist");
+        const rightWrist = getPoseKeypoint(pose, "right_wrist");
+        const leftShoulder = getPoseKeypoint(pose, "left_shoulder");
+        const rightShoulder = getPoseKeypoint(pose, "right_shoulder");
 
-        if (
+        if (!leftShoulder || !rightShoulder) continue;
+
+        const leftArmRaised =
           leftWrist &&
+          leftWrist.confidence > 0.3 &&
+          leftWrist.y < leftShoulder.y;
+        const rightArmRaised =
           rightWrist &&
-          leftShoulder &&
-          rightShoulder &&
-          (leftWrist.confidence > 0.2 || rightWrist.confidence > 0.2) // More lenient - at least one arm visible
-        ) {
-          // Arms raised if wrists are above shoulders
-          const leftArmRaised =
-            leftWrist.confidence > 0.2 && leftWrist.y < leftShoulder.y - 25; // Reduced threshold
-          const rightArmRaised =
-            rightWrist.confidence > 0.2 && rightWrist.y < rightShoulder.y - 25; // Reduced threshold
+          rightWrist.confidence > 0.3 &&
+          rightWrist.y < rightShoulder.y;
 
-          if (leftArmRaised || rightArmRaised) {
-            // Check proximity to shooter
-            const shooterFrame = personDetections.find(
-              (p) => Math.abs(p.timestamp - shot.timestamp) < 0.2
+        if (leftArmRaised || rightArmRaised) {
+          const shooterFrame = personDetections.find(
+            (p) => p.frameIndex === poseFrame.frameIndex
+          );
+          const shooter = shooterFrame?.detections.find(
+            (d: any) => d.playerId === shot.playerId
+          );
+
+          if (shooter && pose.bbox) {
+            const dist = Math.sqrt(
+              Math.pow(shooter.bbox[0] - pose.bbox[0], 2) +
+              Math.pow(shooter.bbox[1] - pose.bbox[1], 2)
             );
 
-            if (shooterFrame) {
-              const shooter = shooterFrame.detections?.find(
-                (d: any) => d.teamId === shot.teamId
-              );
-
-              if (shooter && pose.bbox) {
-                const [sx, sy] = shooter.bbox;
-                const [bx, by] = pose.bbox;
-                const dist = Math.sqrt(
-                  Math.pow(sx - bx, 2) + Math.pow(sy - by, 2)
-                );
-
-                // If defender is close to shooter (within ~100 pixels)
-                if (dist < 150) {
-                  // Attribute block to the opposing team
-                  let blockTeamId = pose.teamId || "unknown";
-                  if (blockTeamId === "unknown" && shot.teamId) {
-                    // If defender has no teamId, assign to opposing team
-                    blockTeamId = shot.teamId === "teamA" ? "teamB" : "teamA";
-                  }
-
-                  blocks.push({
-                    id: `block-${Date.now()}-${Math.random()
-                      .toString(36)
-                      .substr(2, 9)}`,
-                    type: "block",
-                    teamId: blockTeamId,
-                    playerId: pose.playerId,
-                    timestamp: poseFrame.timestamp,
-                    confidence: 0.65,
-                    source: "pose-analysis",
-                    notes: `Defensive block detected: raised arms near shooter`,
-                  });
-
-                  break; // Only one block per shot
-                }
-              }
+            if (dist < 150) {
+              blocks.push({
+                id: `block-${Date.now()}-${Math.random()}`,
+                type: "block",
+                teamId: pose.teamId || "unknown",
+                playerId: pose.playerId,
+                timestamp: poseFrame.timestamp,
+                confidence: 0.7,
+                source: "pose-analysis",
+                notes: "Defensive block detected near shooter.",
+              });
+              break; // One block per shot
             }
           }
         }
       }
+      if (blocks.length > 0 && blocks[blocks.length - 1].id.startsWith("block"))
+        break;
     }
   }
 
@@ -204,9 +193,8 @@ export function detectPasses(
           timestamp: currentHolder.timestamp,
           confidence: 0.55, // Slightly lower confidence
           source: "ball-tracking",
-          notes: `Pass from player ${previousHolder.playerId || "unknown"} to ${
-            currentHolder.playerId || "unknown"
-          }`,
+          notes: `Pass from player ${previousHolder.playerId || "unknown"} to ${currentHolder.playerId || "unknown"
+            }`,
         });
       }
 
@@ -631,6 +619,171 @@ export function detectFoulShots(
 }
 
 /**
+ * Detect rebounds: Player gaining possession after a missed shot
+ */
+export function detectRebounds(
+  shotAttempts: GameEvent[],
+  scores: GameEvent[],
+  ballDetections: any[],
+  personDetections: any[]
+): GameEvent[] {
+  const rebounds: GameEvent[] = [];
+  const missedShots = shotAttempts.filter(
+    (shot) => !scores.some((score) => score.timestamp === shot.timestamp)
+  );
+
+  for (const missedShot of missedShots) {
+    // Look for ball possession within a few seconds after the missed shot
+    const reboundWindow = ballDetections.filter(
+      (b) =>
+        b.timestamp > missedShot.timestamp &&
+        b.timestamp < missedShot.timestamp + 4.0
+    );
+
+    let rebounder: {
+      playerId?: string;
+      teamId?: string;
+      timestamp: number;
+    } | null = null;
+
+    for (const ballFrame of reboundWindow) {
+      const ballDet = ballFrame.detections?.find(
+        (d: any) => d.type === "ball"
+      );
+      if (!ballDet) continue;
+
+      const [ballX, ballY] = [
+        ballDet.bbox[0] + ballDet.bbox[2] / 2,
+        ballDet.bbox[1] + ballDet.bbox[3] / 2,
+      ];
+
+      const personFrame = personDetections.find(
+        (p) => Math.abs(p.timestamp - ballFrame.timestamp) < 0.1
+      );
+      if (!personFrame) continue;
+
+      for (const det of personFrame.detections || []) {
+        if (det.type !== "person") continue;
+
+        const [px, py] = [
+          det.bbox[0] + det.bbox[2] / 2,
+          det.bbox[1] + det.bbox[3] / 2,
+        ];
+        const dist = Math.sqrt(
+          Math.pow(ballX - px, 2) + Math.pow(ballY - py, 2)
+        );
+
+        if (dist < 100) {
+          rebounder = {
+            playerId: det.playerId,
+            teamId: det.teamId,
+            timestamp: ballFrame.timestamp,
+          };
+          break;
+        }
+      }
+
+      if (rebounder) break;
+    }
+
+    if (rebounder) {
+      rebounds.push({
+        id: `rebound-${Date.now()}-${Math.random()
+          .toString(36)
+          .substr(2, 9)}`,
+        type: "rebound",
+        teamId: rebounder.teamId || "unknown",
+        playerId: rebounder.playerId,
+        timestamp: rebounder.timestamp,
+        confidence: 0.6,
+        source: "ball-tracking",
+        notes: `Rebound after missed shot at ${missedShot.timestamp.toFixed(
+          1
+        )}s`,
+      });
+    }
+  }
+
+  return rebounds;
+}
+
+/**
+ * Detect turnovers: Loss of ball possession to the opposing team
+ */
+export function detectTurnovers(
+  ballDetections: any[],
+  personDetections: any[]
+): GameEvent[] {
+  const turnovers: GameEvent[] = [];
+  let lastPossession: {
+    teamId?: string;
+    playerId?: string;
+    timestamp: number;
+  } | null = null;
+
+  for (const ballFrame of ballDetections) {
+    const ballDet = ballFrame.detections?.find((d: any) => d.type === "ball");
+    if (!ballDet) continue;
+
+    const [ballX, ballY] = [
+      ballDet.bbox[0] + ballDet.bbox[2] / 2,
+      ballDet.bbox[1] + ballDet.bbox[3] / 2,
+    ];
+
+    const personFrame = personDetections.find(
+      (p) => Math.abs(p.timestamp - ballFrame.timestamp) < 0.1
+    );
+    if (!personFrame) continue;
+
+    let closestPlayer: any = null;
+    let minDist = Infinity;
+
+    for (const det of personFrame.detections || []) {
+      if (det.type !== "person") continue;
+      const [px, py] = [
+        det.bbox[0] + det.bbox[2] / 2,
+        det.bbox[1] + det.bbox[3] / 2,
+      ];
+      const dist = Math.sqrt(Math.pow(ballX - px, 2) + Math.pow(ballY - py, 2));
+      if (dist < minDist && dist < 120) {
+        minDist = dist;
+        closestPlayer = det;
+      }
+    }
+
+    if (closestPlayer) {
+      const currentPossession = {
+        teamId: closestPlayer.teamId,
+        playerId: closestPlayer.playerId,
+        timestamp: ballFrame.timestamp,
+      };
+
+      if (
+        lastPossession &&
+        lastPossession.teamId &&
+        currentPossession.teamId &&
+        lastPossession.teamId !== currentPossession.teamId
+      ) {
+        turnovers.push({
+          id: `turnover-${Date.now()}-${Math.random()
+            .toString(36)
+            .substr(2, 9)}`,
+          type: "turnover",
+          teamId: lastPossession.teamId, // Team that lost the ball
+          playerId: lastPossession.playerId,
+          timestamp: currentPossession.timestamp,
+          confidence: 0.5,
+          source: "ball-tracking",
+          notes: `Turnover: possession lost to team ${currentPossession.teamId}`,
+        });
+      }
+      lastPossession = currentPossession;
+    }
+  }
+  return turnovers;
+}
+
+/**
  * Process all enhanced actions in the video
  * Combines multiple detection algorithms
  */
@@ -691,6 +844,21 @@ export function detectAllActions(
   );
   console.log(`🎯 Detected ${foulShots.length} foul shots`);
   allActions.push(...foulShots);
+
+  // Detect rebounds
+  const rebounds = detectRebounds(
+    shotAttempts,
+    scores,
+    ballDetections,
+    personDetections
+  );
+  console.log(`🔄 Detected ${rebounds.length} rebounds`);
+  allActions.push(...rebounds);
+
+  // Detect turnovers
+  const turnovers = detectTurnovers(ballDetections, personDetections);
+  console.log(`⚠️ Detected ${turnovers.length} turnovers`);
+  allActions.push(...turnovers);
 
   console.log(`📊 Total actions detected: ${allActions.length}`);
 

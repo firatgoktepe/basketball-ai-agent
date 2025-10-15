@@ -73,6 +73,7 @@ async function testScoreDetection() {
     ocrResults: mockOCRResults,
     teamClusters: {},
     enable3ptEstimation: false,
+    frames: [],
   });
 
   const scoreEvents = result.filter((e) => e.type === "score");
@@ -139,6 +140,7 @@ async function testShotDetection() {
     ocrResults: [],
     teamClusters: {},
     enable3ptEstimation: false,
+    frames: [],
   });
 
   const shotEvents = result.filter((e) => e.type === "shot_attempt");
@@ -202,6 +204,7 @@ async function testTemporalSmoothing() {
     ocrResults: [],
     teamClusters: {},
     enable3ptEstimation: false,
+    frames: [],
   });
 
   const shotEvents = result.filter((e) => e.type === "shot_attempt");
@@ -242,6 +245,7 @@ async function testConfidenceFiltering() {
     ocrResults: [],
     teamClusters: {},
     enable3ptEstimation: false,
+    frames: [],
   });
 
   const shotEvents = result.filter((e) => e.type === "shot_attempt");
@@ -300,6 +304,7 @@ async function testReboundDetection() {
     ocrResults: [],
     teamClusters: {},
     enable3ptEstimation: false,
+    frames: [],
   });
 
   // Manually add shot events since we're testing rebound detection
@@ -314,6 +319,7 @@ async function testReboundDetection() {
     ocrResults: [],
     teamClusters: {},
     enable3ptEstimation: false,
+    frames: [],
   });
 
   const reboundEvents = finalResult.filter(

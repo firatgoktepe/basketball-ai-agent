@@ -36,6 +36,7 @@ import {
 } from "./utils/jersey-detection";
 import { generateTeamSummary } from "./utils/player-statistics";
 import { extractHighlights } from "./utils/highlight-extraction";
+import { analyzeVideoFrames, quickBallDetectionCheck } from "./utils/video-diagnostics";
 
 // Global state
 let cocoModel: any = null;
@@ -50,13 +51,13 @@ async function initializeModels(forceMockPoseModel = false) {
     // Load core models
     const moveNetConfig = forceMockPoseModel
       ? {
-          modelType: "SinglePose.Lightning" as const,
-          forceMock: true,
-        }
+        modelType: "SinglePose.Lightning" as const,
+        forceMock: true,
+      }
       : {
-          modelType: "SinglePose.Lightning" as const,
-          forceMock: false,
-        };
+        modelType: "SinglePose.Lightning" as const,
+        forceMock: false,
+      };
 
     const [coco, moveNet] = await Promise.all([
       loadCocoSSD(),
@@ -92,7 +93,7 @@ async function analyzeVideo(options: any) {
       enableBallDetection,
       enablePoseEstimation,
       enable3ptEstimation,
-      enableJerseyNumberDetection = false,
+      enableJerseyNumberDetection = true, // Enable by default for player tracking
       forceMockPoseModel,
     } = options;
 
@@ -136,6 +137,36 @@ async function analyzeVideo(options: any) {
     console.log(
       `[Worker] Valid frames with data: ${validFrames.length}/${frames.length}`
     );
+
+    // Run quick diagnostics on video content
+    console.log("Running video diagnostics...");
+    const diagnosticReport = analyzeVideoFrames(frames);
+    console.log("Diagnostic Report:", diagnosticReport);
+
+    self.postMessage({
+      type: "debug",
+      data: {
+        message: `📊 Video Analysis: ${diagnosticReport.frameAnalysis.averageWidth}x${diagnosticReport.frameAnalysis.averageHeight}, ${diagnosticReport.colorAnalysis.orangePercentage.toFixed(2)}% orange content`,
+      },
+    });
+
+    // Show warnings if any
+    for (const warning of diagnosticReport.warnings) {
+      self.postMessage({
+        type: "debug",
+        data: { message: warning },
+      });
+    }
+
+    // Quick ball detection check
+    const ballCheck = quickBallDetectionCheck(frames);
+    console.log("Ball Detection Check:", ballCheck);
+    self.postMessage({
+      type: "debug",
+      data: {
+        message: `🔍 Ball Detection Pre-check: ${ballCheck.likelyToWork ? '✅' : '⚠️'} ${ballCheck.reason}`,
+      },
+    });
 
     // Initialize models
     console.log("Initializing models...");
@@ -269,9 +300,8 @@ async function analyzeVideo(options: any) {
       self.postMessage({
         type: "debug",
         data: {
-          message: `✅ Team clustering complete: ${
-            teamClusters?.length || 0
-          } teams`,
+          message: `✅ Team clustering complete: ${teamClusters?.length || 0
+            } teams`,
         },
       });
     } catch (error) {
@@ -453,8 +483,8 @@ async function analyzeVideo(options: any) {
         },
       });
 
-      // Detect shot attempts from poses
-      shotAttempts = detectShotAttempts(poseDetections, ballDetections);
+      // Detect shot attempts from poses (pass person detections for team attribution)
+      shotAttempts = detectShotAttempts(poseDetections, ballDetections, personDetections);
 
       console.log(`Shot attempts detected: ${shotAttempts.length}`);
       self.postMessage({
@@ -611,6 +641,7 @@ async function analyzeVideo(options: any) {
       teamClusters,
       enable3ptEstimation,
       enableVisualScoring: !cropRegion, // Use visual scoring if no crop region (amateur mode)
+      frames,
     });
     console.log(`Generated ${events.length} events`);
 
@@ -771,9 +802,12 @@ function generateFallbackEvents(videoFile: any, teamClusters: any): any[] {
     `🎬 Generating ${eventCount} fallback events for ${duration}s video`
   );
 
+  // Alternate player IDs for fallback events
+  const fallbackPlayerIds = ["A1", "B1", "A2", "B2", "A3", "B3"];
   for (let i = 0; i < eventCount; i++) {
     const timestamp = (duration / (eventCount + 1)) * (i + 1);
     const teamId = i % 2 === 0 ? "teamA" : "teamB";
+    const playerId = fallbackPlayerIds[i % fallbackPlayerIds.length];
 
     // Generate a more realistic mix of event types
     const eventTypes = [
@@ -789,6 +823,7 @@ function generateFallbackEvents(videoFile: any, teamClusters: any): any[] {
       id: `fallback-${Date.now()}-${i}`,
       type: eventType,
       teamId,
+      playerId,
       timestamp,
       confidence: 0.6, // Higher confidence for fallback events
       source: "fallback",
@@ -807,29 +842,52 @@ function generateFallbackEvents(videoFile: any, teamClusters: any): any[] {
 
   // Add some rebounds and turnovers for more realistic data
   if (eventCount >= 4) {
-    // Add a rebound after a shot attempt
-    const shotEvent = events.find((e) => e.type === "shot_attempt");
-    if (shotEvent) {
+    // Add a rebound after a shot attempt for both teams
+    const shotEvents = events.filter((e) => e.type === "shot_attempt");
+    if (shotEvents.length >= 2) {
+      // Add a rebound for each team
       events.push({
-        id: `fallback-rebound-${Date.now()}`,
+        id: `fallback-reboundA-${Date.now()}`,
         type: "defensive_rebound",
-        teamId: shotEvent.teamId === "teamA" ? "teamB" : "teamA",
-        timestamp: shotEvent.timestamp + 2,
+        teamId: "teamA",
+        playerId: "A1",
+        timestamp: shotEvents[0].timestamp + 2,
         confidence: 0.5,
         source: "fallback",
-        notes: "Generated fallback rebound",
+        notes: "Generated fallback rebound for Team A",
+      });
+      events.push({
+        id: `fallback-reboundB-${Date.now()}`,
+        type: "defensive_rebound",
+        teamId: "teamB",
+        playerId: "B1",
+        timestamp: shotEvents[1].timestamp + 2,
+        confidence: 0.5,
+        source: "fallback",
+        notes: "Generated fallback rebound for Team B",
       });
     }
 
-    // Add a turnover
+    // Add a turnover for each team
     events.push({
-      id: `fallback-turnover-${Date.now()}`,
+      id: `fallback-turnoverA-${Date.now()}`,
       type: "turnover",
       teamId: "teamA",
+      playerId: "A2",
       timestamp: duration * 0.6,
       confidence: 0.5,
       source: "fallback",
-      notes: "Generated fallback turnover",
+      notes: "Generated fallback turnover for Team A",
+    });
+    events.push({
+      id: `fallback-turnoverB-${Date.now()}`,
+      type: "turnover",
+      teamId: "teamB",
+      playerId: "B2",
+      timestamp: duration * 0.7,
+      confidence: 0.5,
+      source: "fallback",
+      notes: "Generated fallback turnover for Team B",
     });
   }
 

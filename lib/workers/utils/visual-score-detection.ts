@@ -136,33 +136,60 @@ export function detectBallThroughHoop(
     return false;
   }
 
-  // Filter positions within time window
-  const recentPositions = ballPositions.slice(-10);
+  // Use ALL positions, not just last 10
+  const recentPositions = ballPositions;
 
-  // Check if ball passed through hoop region
-  // Look for downward trajectory through the hoop area
+  // Look for ANY downward ball movement near the hoop region
+  // Much more lenient criteria for amateur videos
+  let maxDownwardMotion = 0;
+  let closestToHoop = Infinity;
+  let hadDownwardMotionNearHoop = false;
+
   for (let i = 1; i < recentPositions.length; i++) {
     const prev = recentPositions[i - 1];
     const curr = recentPositions[i];
 
-    // Check if ball moved downward
-    const movingDown = curr.y > prev.y;
+    // Calculate downward motion
+    const downwardMotion = curr.y - prev.y;
+    if (downwardMotion > maxDownwardMotion) {
+      maxDownwardMotion = downwardMotion;
+    }
 
-    // Check if ball is in hoop horizontal range
-    const inHoopXRange =
-      curr.x >= hoopRegion.x && curr.x <= hoopRegion.x + hoopRegion.width;
+    // Check distance to hoop center
+    const hoopCenterX = hoopRegion.x + hoopRegion.width / 2;
+    const hoopCenterY = hoopRegion.y + hoopRegion.height / 2;
+    const distanceToHoop = Math.sqrt(
+      Math.pow(curr.x - hoopCenterX, 2) + Math.pow(curr.y - hoopCenterY, 2)
+    );
 
-    // Check if ball passed through hoop vertical range
-    const passedThroughHoop =
-      prev.y < hoopRegion.y + hoopRegion.height / 2 &&
-      curr.y > hoopRegion.y + hoopRegion.height / 2;
+    if (distanceToHoop < closestToHoop) {
+      closestToHoop = distanceToHoop;
+    }
 
-    if (movingDown && inHoopXRange && passedThroughHoop) {
-      return true;
+    // RELAXED: Check if ball is anywhere near hoop region (much larger margin)
+    const margin = hoopRegion.width * 1.5; // 150% margin
+    const nearHoopX =
+      curr.x >= hoopRegion.x - margin &&
+      curr.x <= hoopRegion.x + hoopRegion.width + margin;
+    const nearHoopY =
+      curr.y >= hoopRegion.y - margin &&
+      curr.y <= hoopRegion.y + hoopRegion.height + margin;
+
+    // Check if ball had downward motion while near hoop
+    if (downwardMotion > 5 && nearHoopX && nearHoopY) {
+      hadDownwardMotionNearHoop = true;
     }
   }
 
-  return false;
+  // VERY RELAXED scoring criteria:
+  // If ball came close to hoop (within 2x hoop width) AND had ANY significant downward motion
+  const hoopWidth = hoopRegion.width;
+  const cameCloseToHoop = closestToHoop < hoopWidth * 2;
+  const hadSignificantDownwardMotion = maxDownwardMotion > 10; // pixels
+
+  const scored = (cameCloseToHoop && hadSignificantDownwardMotion) || hadDownwardMotionNearHoop;
+
+  return scored;
 }
 
 /**
@@ -176,6 +203,21 @@ export function correlateShotsToScores(
 ): VisualScoreEvent[] {
   const scoreEvents: VisualScoreEvent[] = [];
 
+  console.log(`[Score Correlation] Starting with ${shotAttempts.length} shots, ${hoopDetections.length} hoop detections`);
+
+  // Check how many hoops have actual regions
+  const hoopsWithRegions = hoopDetections.filter(h => h.hoopRegion).length;
+  console.log(`[Score Correlation] Hoops with valid regions: ${hoopsWithRegions}/${hoopDetections.length}`);
+
+  if (typeof self !== "undefined" && self.postMessage) {
+    self.postMessage({
+      type: "debug",
+      data: {
+        message: `🎯 Score Correlation: ${shotAttempts.length} shots, ${hoopsWithRegions} hoop regions detected`,
+      },
+    });
+  }
+
   // For each shot attempt, check if ball went through hoop within 2 seconds
   for (const shot of shotAttempts) {
     if (shot.type !== "shot_attempt") continue;
@@ -188,6 +230,21 @@ export function correlateShotsToScores(
     );
 
     if (!nearbyHoopDetection || !nearbyHoopDetection.hoopRegion) {
+      // Log why this shot couldn't be correlated (first 3 shots only to avoid spam)
+      if (scoreEvents.length === 0) {
+        const reason = !nearbyHoopDetection
+          ? "No hoop detection within 2s"
+          : "Hoop detection exists but no region";
+
+        if (typeof self !== "undefined" && self.postMessage) {
+          self.postMessage({
+            type: "debug",
+            data: {
+              message: `⚠️ Shot at ${shotTimestamp.toFixed(1)}s skipped: ${reason}`,
+            },
+          });
+        }
+      }
       continue;
     }
 
@@ -202,11 +259,35 @@ export function correlateShotsToScores(
       }
     }
 
+    // Log first few shot correlations
+    if (scoreEvents.length < 3) {
+      if (typeof self !== "undefined" && self.postMessage) {
+        self.postMessage({
+          type: "debug",
+          data: {
+            message: `🎯 Shot at ${shotTimestamp.toFixed(1)}s: ${ballTrajectory.length} ball positions in trajectory`,
+          },
+        });
+      }
+    }
+
     // Check if ball went through hoop
     const scoredThroughHoop = detectBallThroughHoop(
       ballTrajectory,
       nearbyHoopDetection.hoopRegion
     );
+
+    // Log result for first few
+    if (scoreEvents.length < 3) {
+      if (typeof self !== "undefined" && self.postMessage) {
+        self.postMessage({
+          type: "debug",
+          data: {
+            message: `${scoredThroughHoop ? '✅' : '❌'} Shot at ${shotTimestamp.toFixed(1)}s: Ball through hoop = ${scoredThroughHoop}`,
+          },
+        });
+      }
+    }
 
     if (scoredThroughHoop) {
       // Determine shot type based on shot event
@@ -225,7 +306,28 @@ export function correlateShotsToScores(
         confidence: 0.75 * (nearbyHoopDetection.hoopRegion.confidence || 0.8),
         ballThroughHoop: true,
       });
+
+      // Log successful score detection
+      if (typeof self !== "undefined" && self.postMessage) {
+        self.postMessage({
+          type: "debug",
+          data: {
+            message: `🎉 SCORE DETECTED at ${shotTimestamp.toFixed(1)}s: ${shotType} (+${scoreDelta}) by ${shot.teamId}`,
+          },
+        });
+      }
     }
+  }
+
+  console.log(`[Score Correlation] Generated ${scoreEvents.length} scores from ${shotAttempts.length} shots`);
+
+  if (typeof self !== "undefined" && self.postMessage) {
+    self.postMessage({
+      type: "debug",
+      data: {
+        message: `📊 Score Correlation Complete: ${scoreEvents.length}/${shotAttempts.length} shots resulted in scores`,
+      },
+    });
   }
 
   return scoreEvents;
@@ -412,8 +514,7 @@ function estimateScoresFromShotAttempts(
   }
 
   console.log(
-    `[Score Estimation] Estimated ${scores.length} scores from ${
-      shotAttempts.length
+    `[Score Estimation] Estimated ${scores.length} scores from ${shotAttempts.length
     } shots (${(scoreRate * 100).toFixed(0)}% success rate)`
   );
 
@@ -426,6 +527,8 @@ export function processHoopDetections(
 ): HoopDetectionResult[] {
   const hoopDetections: HoopDetectionResult[] = [];
 
+  console.log(`[Hoop Detection] Starting hoop detection on ${frames.length} frames at ${samplingRate} fps`);
+
   // Sample frames at specified rate
   const frameInterval = Math.max(1, Math.floor(30 / samplingRate));
 
@@ -435,7 +538,22 @@ export function processHoopDetections(
 
     if (result.hoopRegion) {
       hoopDetections.push(result);
+      // Log first few hoops
+      if (hoopDetections.length <= 3) {
+        console.log(`[Hoop Detection] Found hoop at frame ${i}: confidence=${result.hoopRegion.confidence.toFixed(2)}`);
+      }
     }
+  }
+
+  console.log(`[Hoop Detection] Complete: Found ${hoopDetections.length} frames with hoop regions`);
+
+  if (typeof self !== "undefined" && self.postMessage) {
+    self.postMessage({
+      type: "debug",
+      data: {
+        message: `🏀 Hoop Detection: Found ${hoopDetections.length} frames with hoop regions`,
+      },
+    });
   }
 
   // If we found hoops in multiple frames, use temporal smoothing

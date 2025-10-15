@@ -177,23 +177,29 @@ function isJerseyColor(
   s: number,
   v: number
 ): boolean {
-  // Filter out skin tones (hue around 0-30 and 330-360, low saturation)
-  if (s < 0.3 && ((h >= 0 && h <= 30) || (h >= 330 && h <= 360))) {
+  // Filter out skin tones (hue around 0-50 and 320-360 with low saturation)
+  if (s < 0.3 && ((h >= 0 && h <= 50) || (h >= 320 && h <= 360))) {
     return false;
   }
 
-  // Filter out very dark or very light colors
-  if (v < 0.2 || v > 0.95) {
+  // Filter out very dark colors (but keep darker jerseys)
+  if (v < 0.15) {
     return false;
   }
 
-  // Filter out grayscale colors (low saturation)
-  if (s < 0.1) {
+  // Filter out very light/white colors (but keep light jerseys)
+  if (v > 0.98 && s < 0.1) {
     return false;
   }
 
-  // Prefer saturated colors typical of sports jerseys
-  return s > 0.2;
+  // Filter out pure grayscale colors (very low saturation)
+  if (s < 0.08) {
+    return false;
+  }
+
+  // Accept colors with some saturation (typical of sports jerseys)
+  // Lower threshold to include more jersey colors
+  return s > 0.15 || (v < 0.3 || v > 0.7); // Also accept very dark or very light if saturated
 }
 
 export function clusterColorsByKMeans(
@@ -204,72 +210,212 @@ export function clusterColorsByKMeans(
   samples: ColorSample[];
   teamId?: string;
 }> {
+  console.log(`🎨 Starting K-means clustering with ${colorSamples.length} color samples, k=${k}`);
+  
   if (colorSamples.length < k) {
+    // Not enough samples to form clusters, return a single cluster if possible
+    console.warn(`⚠️ Not enough samples (${colorSamples.length}) for ${k} clusters`);
+    if (colorSamples.length > 0) {
+      const avgColor = colorSamples.reduce(
+        (acc, sample) => {
+          acc.r += sample.r;
+          acc.g += sample.g;
+          acc.b += sample.b;
+          return acc;
+        },
+        { r: 0, g: 0, b: 0 }
+      );
+      return [
+        {
+          centroid: {
+            r: avgColor.r / colorSamples.length,
+            g: avgColor.g / colorSamples.length,
+            b: avgColor.b / colorSamples.length,
+          },
+          samples: colorSamples,
+          teamId: "teamA",
+        },
+      ];
+    }
     return [];
   }
 
-  const clusters: Array<{
+  // K-means clustering implementation
+  let centroids = initializeCentroids(colorSamples, k);
+  let clusters: Array<{
     centroid: { r: number; g: number; b: number };
     samples: ColorSample[];
     teamId?: string;
   }> = [];
 
-  // Initialize centroids with random samples
-  for (let i = 0; i < k; i++) {
-    const randomSample =
-      colorSamples[Math.floor(Math.random() * colorSamples.length)];
-    clusters.push({
-      centroid: { r: randomSample.r, g: randomSample.g, b: randomSample.b },
+  for (let iteration = 0; iteration < 20; iteration++) {
+    // Create clusters
+    clusters = centroids.map((c) => ({
+      centroid: c,
       samples: [],
-    });
-  }
+    }));
 
-  // Perform K-means iterations
-  for (let iteration = 0; iteration < 10; iteration++) {
-    // Clear samples
-    clusters.forEach((cluster) => (cluster.samples = []));
-
-    // Assign samples to nearest centroid
+    // Assign samples to the nearest centroid
     for (const sample of colorSamples) {
-      let nearestCluster = 0;
+      let nearestCentroidIndex = 0;
       let minDistance = Infinity;
-
-      for (let i = 0; i < clusters.length; i++) {
-        const distance = Math.sqrt(
-          Math.pow(sample.r - clusters[i].centroid.r, 2) +
-            Math.pow(sample.g - clusters[i].centroid.g, 2) +
-            Math.pow(sample.b - clusters[i].centroid.b, 2)
-        );
-
+      for (let i = 0; i < centroids.length; i++) {
+        const distance = colorDistance(sample, centroids[i]);
         if (distance < minDistance) {
           minDistance = distance;
-          nearestCluster = i;
+          nearestCentroidIndex = i;
         }
       }
-
-      clusters[nearestCluster].samples.push(sample);
+      clusters[nearestCentroidIndex].samples.push(sample);
     }
 
-    // Update centroids
-    for (const cluster of clusters) {
-      if (cluster.samples.length > 0) {
-        cluster.centroid.r =
-          cluster.samples.reduce((sum, s) => sum + s.r, 0) /
-          cluster.samples.length;
-        cluster.centroid.g =
-          cluster.samples.reduce((sum, s) => sum + s.g, 0) /
-          cluster.samples.length;
-        cluster.centroid.b =
-          cluster.samples.reduce((sum, s) => sum + s.b, 0) /
-          cluster.samples.length;
+    // Recalculate centroids
+    let hasChanged = false;
+    for (let i = 0; i < clusters.length; i++) {
+      if (clusters[i].samples.length > 0) {
+        const newCentroid = calculateCentroid(clusters[i].samples);
+        if (colorDistance(newCentroid, centroids[i]) > 1) {
+          hasChanged = true;
+        }
+        centroids[i] = newCentroid;
       }
+    }
+
+    if (!hasChanged) break; // Converged
+  }
+
+  // Filter out empty clusters
+  const validClusters = clusters.filter((c) => c.samples.length > 0);
+  
+  console.log(`✅ K-means converged: found ${validClusters.length} valid cluster(s)`);
+  validClusters.forEach((cluster, i) => {
+    const { r, g, b } = cluster.centroid;
+    console.log(
+      `  Cluster ${i}: RGB(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}) - ${cluster.samples.length} samples`
+    );
+  });
+
+  // If only one cluster is found, return it as teamA
+  if (validClusters.length === 1) {
+    console.log("⚠️ Only 1 cluster found, assigning to teamA");
+    validClusters[0].teamId = "teamA";
+    return validClusters;
+  }
+
+  // If two clusters, check if they are distinct enough
+  if (validClusters.length === 2) {
+    const distance = colorDistance(
+      validClusters[0].centroid,
+      validClusters[1].centroid
+    );
+    
+    console.log(
+      `📏 Team color distance: ${distance.toFixed(1)} (threshold: 30 for merging)`
+    );
+    
+    // Only merge if colors are REALLY similar (distance < 30)
+    // Most basketball teams have distinct enough colors (distance > 30)
+    if (distance < 30) {
+      console.log(
+        `⚠️ Team colors are VERY similar (distance: ${distance.toFixed(
+          1
+        )}). Merging into a single team.`
+      );
+      // Merge samples into the larger cluster
+      const largerCluster =
+        validClusters[0].samples.length > validClusters[1].samples.length
+          ? validClusters[0]
+          : validClusters[1];
+      const smallerCluster =
+        largerCluster === validClusters[0]
+          ? validClusters[1]
+          : validClusters[0];
+      largerCluster.samples.push(...smallerCluster.samples);
+      largerCluster.centroid = calculateCentroid(largerCluster.samples);
+      largerCluster.teamId = "teamA";
+      return [largerCluster];
+    } else {
+      console.log(
+        `✅ Team colors are distinct enough (distance: ${distance.toFixed(1)}). Keeping 2 teams.`
+      );
     }
   }
 
-  // Assign team IDs based on color characteristics
-  assignTeamIds(clusters);
+  // Assign team IDs
+  assignTeamIds(validClusters);
 
-  return clusters;
+  return validClusters;
+}
+
+function initializeCentroids(
+  samples: ColorSample[],
+  k: number
+): Array<{ r: number; g: number; b: number }> {
+  const centroids: Array<{ r: number; g: number; b: number }> = [];
+  const initialSample = samples[Math.floor(Math.random() * samples.length)];
+  centroids.push({
+    r: initialSample.r,
+    g: initialSample.g,
+    b: initialSample.b,
+  });
+
+  while (centroids.length < k) {
+    let maxDistance = -1;
+    let farthestSample: ColorSample | null = null;
+
+    for (const sample of samples) {
+      let minDistanceToCentroid = Infinity;
+      for (const centroid of centroids) {
+        const distance = colorDistance(sample, centroid);
+        if (distance < minDistanceToCentroid) {
+          minDistanceToCentroid = distance;
+        }
+      }
+      if (minDistanceToCentroid > maxDistance) {
+        maxDistance = minDistanceToCentroid;
+        farthestSample = sample;
+      }
+    }
+
+    if (farthestSample) {
+      centroids.push({
+        r: farthestSample.r,
+        g: farthestSample.g,
+        b: farthestSample.b,
+      });
+    }
+  }
+  return centroids;
+}
+
+function calculateCentroid(
+  samples: ColorSample[]
+): { r: number; g: number; b: number } {
+  const total = samples.reduce(
+    (acc, sample) => {
+      acc.r += sample.r;
+      acc.g += sample.g;
+      acc.b += sample.b;
+      return acc;
+    },
+    { r: 0, g: 0, b: 0 }
+  );
+  return {
+    r: total.r / samples.length,
+    g: total.g / samples.length,
+    b: total.b / samples.length,
+  };
+}
+
+function colorDistance(
+  c1: { r: number; g: number; b: number },
+  c2: { r: number; g: number; b: number }
+): number {
+  return Math.sqrt(
+    Math.pow(c1.r - c2.r, 2) +
+    Math.pow(c1.g - c2.g, 2) +
+    Math.pow(c1.b - c2.b, 2)
+  );
 }
 
 function assignTeamIds(
@@ -292,8 +438,7 @@ function assignTeamIds(
     console.log(
       `Cluster ${i}: RGB(${Math.round(r)}, ${Math.round(g)}, ${Math.round(
         b
-      )}) HSV(${h.toFixed(1)}, ${s.toFixed(2)}, ${v.toFixed(2)}) - ${
-        cluster.samples.length
+      )}) HSV(${h.toFixed(1)}, ${s.toFixed(2)}, ${v.toFixed(2)}) - ${cluster.samples.length
       } samples`
     );
 
@@ -311,8 +456,8 @@ function assignTeamIds(
     const cluster2 = clusters[1];
     const distance = Math.sqrt(
       Math.pow(cluster1.centroid.r - cluster2.centroid.r, 2) +
-        Math.pow(cluster1.centroid.g - cluster2.centroid.g, 2) +
-        Math.pow(cluster1.centroid.b - cluster2.centroid.b, 2)
+      Math.pow(cluster1.centroid.g - cluster2.centroid.g, 2) +
+      Math.pow(cluster1.centroid.b - cluster2.centroid.b, 2)
     );
 
     console.log(`📏 Color distance between clusters: ${distance.toFixed(1)}`);
@@ -342,23 +487,51 @@ function assignTeamIds(
 
 export function assignTeamToDetection(
   detection: any,
-  colorSamples: ColorSample[],
+  frame: ImageData,
   clusters: Array<{
     centroid: { r: number; g: number; b: number };
     samples: ColorSample[];
     teamId?: string;
   }>
 ): string | undefined {
-  // Find the most similar cluster for this detection
-  // This is a simplified version - in reality, you'd analyze the actual colors in the detection
-
   if (clusters.length === 0) return undefined;
 
-  // For now, assign based on detection position (left vs right side of court)
-  const [x, y, width, height] = detection.bbox;
-  const centerX = x + width / 2;
+  // Extract the average color from the detection's bounding box
+  const detectionColors = extractColorsFromBbox(frame, detection.bbox);
+  if (detectionColors.length === 0) return undefined;
 
-  // Simple heuristic: left side = teamA, right side = teamB
-  // In a real implementation, you'd analyze the actual jersey colors
-  return centerX < 400 ? "teamA" : "teamB";
+  const avgDetectionColor = detectionColors.reduce(
+    (acc, color) => {
+      acc.r += color.r;
+      acc.g += color.g;
+      acc.b += color.b;
+      return acc;
+    },
+    { r: 0, g: 0, b: 0 }
+  );
+
+  avgDetectionColor.r /= detectionColors.length;
+  avgDetectionColor.g /= detectionColors.length;
+  avgDetectionColor.b /= detectionColors.length;
+
+  // Find the nearest cluster centroid
+  let nearestClusterId: string | undefined = undefined;
+  let minDistance = Infinity;
+
+  for (const cluster of clusters) {
+    if (!cluster.teamId) continue;
+
+    const distance = Math.sqrt(
+      Math.pow(avgDetectionColor.r - cluster.centroid.r, 2) +
+      Math.pow(avgDetectionColor.g - cluster.centroid.g, 2) +
+      Math.pow(avgDetectionColor.b - cluster.centroid.b, 2)
+    );
+
+    if (distance < minDistance) {
+      minDistance = distance;
+      nearestClusterId = cluster.teamId;
+    }
+  }
+
+  return nearestClusterId;
 }

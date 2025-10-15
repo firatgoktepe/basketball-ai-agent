@@ -211,18 +211,13 @@ export async function clusterTeams(
   const colorSamples = extractJerseyColors(detections, frames);
 
   if (colorSamples.length < 2) {
-    // Not enough samples for clustering - return default clusters
-    console.log("Not enough color samples for clustering, using fallback");
+    // Not enough samples for clustering - single team
+    console.log("Not enough color samples (<2), assuming single team");
     return [
       {
         centroid: { r: 0, g: 51, b: 204 }, // Blue
-        samples: [],
+        samples: colorSamples,
         teamId: "teamA",
-      },
-      {
-        centroid: { r: 204, g: 0, b: 0 }, // Red
-        samples: [],
-        teamId: "teamB",
       },
     ];
   }
@@ -231,6 +226,15 @@ export async function clusterTeams(
 
   // Perform K-means clustering on colors
   const clusters = clusterColorsByKMeans(colorSamples, 2);
+
+  // clusters might return 1 team if colors too similar
+  if (clusters.length === 1) {
+    console.log("✅ Single team detected from color clustering");
+    return [{
+      ...clusters[0],
+      teamId: "teamA"
+    }];
+  }
 
   // Assign team IDs based on cluster membership
   assignTeamsToClusters(clusters);
@@ -241,7 +245,7 @@ export async function clusterTeams(
     teamId: cluster.teamId || (index === 0 ? "teamA" : "teamB"),
   }));
 
-  console.log("Team clusters:", clustersWithTeamId);
+  console.log(`Team clusters: ${clustersWithTeamId.length} team(s) detected`);
   return clustersWithTeamId;
 }
 
@@ -291,8 +295,8 @@ function performKMeansClustering(
     for (let i = 0; i < clusters.length; i++) {
       const distance = Math.sqrt(
         Math.pow(sample.r - clusters[i].centroid.r, 2) +
-          Math.pow(sample.g - clusters[i].centroid.g, 2) +
-          Math.pow(sample.b - clusters[i].centroid.b, 2)
+        Math.pow(sample.g - clusters[i].centroid.g, 2) +
+        Math.pow(sample.b - clusters[i].centroid.b, 2)
       );
 
       if (distance < minDistance) {
@@ -351,6 +355,8 @@ export function assignTeamsToDetections(
   }
 
   let assignedCount = 0;
+  let teamACount = 0;
+  let teamBCount = 0;
 
   for (const result of detections) {
     const frame = frames[result.frameIndex];
@@ -383,6 +389,14 @@ export function assignTeamsToDetections(
       const g = frame.data[pixelIndex + 1];
       const b = frame.data[pixelIndex + 2];
 
+      // If only one team, assign all to teamA
+      if (teamClusters.length === 1) {
+        detection.teamId = teamClusters[0].teamId;
+        assignedCount++;
+        if (detection.teamId === "teamA") teamACount++;
+        continue;
+      }
+
       // Find nearest cluster
       let nearestCluster = teamClusters[0];
       let minDistance = Infinity;
@@ -390,8 +404,8 @@ export function assignTeamsToDetections(
       for (const cluster of teamClusters) {
         const distance = Math.sqrt(
           Math.pow(r - cluster.centroid.r, 2) +
-            Math.pow(g - cluster.centroid.g, 2) +
-            Math.pow(b - cluster.centroid.b, 2)
+          Math.pow(g - cluster.centroid.g, 2) +
+          Math.pow(b - cluster.centroid.b, 2)
         );
 
         if (distance < minDistance) {
@@ -402,16 +416,18 @@ export function assignTeamsToDetections(
 
       detection.teamId = nearestCluster.teamId;
       assignedCount++;
+      if (detection.teamId === "teamA") teamACount++;
+      if (detection.teamId === "teamB") teamBCount++;
     }
   }
 
-  console.log(`Assigned team IDs to ${assignedCount} detections`);
+  console.log(`Assigned team IDs to ${assignedCount} detections (teamA: ${teamACount}, teamB: ${teamBCount})`);
 
   if (typeof self !== "undefined" && self.postMessage) {
     self.postMessage({
       type: "debug",
       data: {
-        message: `✅ Team assignment: ${assignedCount} detections now have team IDs`,
+        message: `✅ Team assignment: ${assignedCount} detections (teamA: ${teamACount}, teamB: ${teamBCount})`,
       },
     });
   }

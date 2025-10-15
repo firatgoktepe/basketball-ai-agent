@@ -15,22 +15,23 @@ export interface Team {
 export interface GameEvent {
   id: string;
   type:
-    | "score"
-    | "shot_attempt"
-    | "missed_shot"
-    | "offensive_rebound"
-    | "defensive_rebound"
-    | "turnover"
-    | "steal"
-    | "3pt"
-    | "long_distance_attempt"
-    | "block"
-    | "pass"
-    | "dunk"
-    | "assist"
-    | "layup"
-    | "foul_shot"
-    | "dribble";
+  | "score"
+  | "shot_attempt"
+  | "missed_shot"
+  | "rebound"
+  | "offensive_rebound"
+  | "defensive_rebound"
+  | "turnover"
+  | "steal"
+  | "3pt"
+  | "long_distance_attempt"
+  | "block"
+  | "pass"
+  | "dunk"
+  | "assist"
+  | "layup"
+  | "foul_shot"
+  | "dribble";
   teamId: string;
   playerId?: string; // Jersey number or player identifier
   scoreDelta?: number;
@@ -106,13 +107,13 @@ export interface GameData {
 
 export interface AnalysisProgress {
   stage:
-    | "initializing"
-    | "sampling"
-    | "detection"
-    | "ocr"
-    | "fusion"
-    | "results"
-    | "error";
+  | "initializing"
+  | "sampling"
+  | "detection"
+  | "ocr"
+  | "fusion"
+  | "results"
+  | "error";
   progress: number; // 0-100
   message: string;
 }

@@ -16,9 +16,9 @@ export interface Pose {
 
 export interface MoveNetConfig {
   modelType:
-    | "SinglePose.Lightning"
-    | "SinglePose.Thunder"
-    | "MultiPose.Lightning";
+  | "SinglePose.Lightning"
+  | "SinglePose.Thunder"
+  | "MultiPose.Lightning";
   enableSmoothing?: boolean;
   minPoseConfidence?: number;
   enableTracking?: boolean;
@@ -72,25 +72,33 @@ export class LocalMoveNetPoseEstimator {
 
     try {
       console.log(
+        "========== MOVENET MODEL LOADING START =========="
+      );
+      console.log(
         "🔄 Attempting to load MoveNet model using local strategy..."
       );
+      console.log("TensorFlow.js version:", tf.version);
+      console.log("TensorFlow.js backend:", tf.getBackend());
 
       if (typeof self !== "undefined" && self.postMessage) {
         self.postMessage({
           type: "debug",
           data: {
             message:
-              "🔄 Attempting to load MoveNet model using local strategy...",
+              `🔄 MoveNet Loading: TF.js v${tf.version.tfjs}, backend: ${tf.getBackend()}`,
           },
         });
       }
 
       // Strategy 1: Try to load from a local model file
       try {
+        console.log("📁 Strategy 1: Trying local model file...");
         await this.tryLoadLocalModel();
+        console.log("✅ Strategy 1 succeeded - using local model");
         return;
       } catch (error) {
-        console.log("Local model loading failed, trying other strategies...");
+        console.warn("❌ Strategy 1 failed:", error);
+        console.log("Trying other strategies...");
       }
 
       // Strategy 2: Try to create a working model from TensorFlow.js built-ins
@@ -118,9 +126,8 @@ export class LocalMoveNetPoseEstimator {
         self.postMessage({
           type: "debug",
           data: {
-            message: `❌ All MoveNet loading strategies failed: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
+            message: `❌ All MoveNet loading strategies failed: ${error instanceof Error ? error.message : String(error)
+              }`,
           },
         });
       }
@@ -143,174 +150,143 @@ export class LocalMoveNetPoseEstimator {
   }
 
   private async tryLoadLocalModel(): Promise<void> {
-    // Strategy 1: Try local model first
-    const localModelPath = "/models/movenet/model.json";
+    // Try multiple path variations for the local model
+    const localModelPaths = [
+      "/models/movenet/model.json",
+      "./models/movenet/model.json",
+      "../../../public/models/movenet/model.json",
+    ];
 
-    try {
-      console.log(`🔄 Trying local MoveNet model: ${localModelPath}`);
-      // Load with explicit options to prevent fallback CDN attempts
-      this.model = await tf.loadGraphModel(localModelPath, {
-        requestInit: {
-          cache: "force-cache", // Prefer local cache
-        },
-      });
-      console.log("✅ MoveNet loaded from local storage");
+    for (const localModelPath of localModelPaths) {
+      try {
+        console.log(`🔄 Trying local MoveNet model: ${localModelPath}`);
 
-      if (typeof self !== "undefined" && self.postMessage) {
-        self.postMessage({
-          type: "debug",
-          data: { message: "✅ MoveNet loaded from local storage" },
-        });
+        // First, test if model.json is accessible
+        try {
+          const testResponse = await fetch(localModelPath);
+          if (!testResponse.ok) {
+            console.warn(`Model file not accessible at ${localModelPath}: ${testResponse.status}`);
+            continue;
+          }
+          const testData = await testResponse.json();
+          console.log(`✅ Model file accessible at ${localModelPath}, format: ${testData.format || 'unknown'}`);
+        } catch (fetchError) {
+          console.warn(`Fetch test failed for ${localModelPath}:`, fetchError);
+          continue;
+        }
+
+        // Log detailed loading attempt
+        if (typeof self !== "undefined" && self.postMessage) {
+          self.postMessage({
+            type: "debug",
+            data: { message: `🔄 Loading local model from: ${localModelPath}` },
+          });
+        }
+
+        // Try to load with TensorFlow.js
+        this.model = await tf.loadGraphModel(localModelPath);
+        this.isMockModel = false;
+
+        console.log("✅ MoveNet loaded from local storage!");
+        console.log("Model type:", this.model instanceof tf.GraphModel ? "GraphModel" : "LayersModel");
+        console.log("Model inputs:", this.model.inputs);
+        console.log("Model outputs:", this.model.outputs);
+
+        if (typeof self !== "undefined" && self.postMessage) {
+          self.postMessage({
+            type: "debug",
+            data: { message: "✅ MoveNet loaded successfully from local storage! Pose detection will use real model." },
+          });
+        }
+        return; // Success!
+      } catch (localError) {
+        console.warn(`Local model loading failed for ${localModelPath}:`, localError);
       }
-      return;
-    } catch (localError) {
-      console.log("Local model not found, trying CDN...");
     }
 
-    // Strategy 2: Try jsdelivr with direct model files
+    // All local paths failed
+    console.warn("❌ All local model paths failed - model files may not be accessible from worker");
+
+    if (typeof self !== "undefined" && self.postMessage) {
+      self.postMessage({
+        type: "debug",
+        data: {
+          message: `⚠️ Local model not found - trying CDN fallback`,
+        },
+      });
+    }
+
+    // Strategy 2: Try CDN as fallback
     const cdnUrls = [
       // Using jsdelivr GH repo (better CORS than npm for large files)
       "https://cdn.jsdelivr.net/gh/tensorflow/tfjs-models/pose-detection/movenet/model.json",
+      "https://storage.googleapis.com/tfjs-models/savedmodel/movenet/singlepose/lightning/4/model.json",
     ];
 
     for (const url of cdnUrls) {
       try {
         console.log(`🔄 Trying CDN: ${url}`);
         this.model = await tf.loadGraphModel(url);
+        this.isMockModel = false;
         console.log("✅ MoveNet loaded from CDN");
 
         if (typeof self !== "undefined" && self.postMessage) {
           self.postMessage({
             type: "debug",
-            data: { message: "✅ MoveNet loaded successfully" },
+            data: { message: "✅ MoveNet loaded successfully from CDN" },
           });
         }
         return;
       } catch (error) {
-        console.warn(`CDN failed: ${url}`);
+        console.warn(`CDN failed: ${url}`, error);
       }
     }
 
     // All attempts failed - throw to trigger fallback
-    throw new Error("Could not load MoveNet model - will use fallback");
+    throw new Error("Could not load MoveNet model from local or CDN - will use fallback");
   }
 
   private async createWorkingModel(): Promise<void> {
-    // Create a simple CNN model that can detect basic pose-like features
-    console.log("🔄 Creating working pose detection model...");
+    // NOTE: Creating an untrained model won't work - it will just output noise
+    // Instead, we should use mock pose generation which at least provides plausible data
+    console.log("⚠️ Real model unavailable - will use mock pose generation instead");
 
     if (typeof self !== "undefined" && self.postMessage) {
       self.postMessage({
         type: "debug",
         data: {
-          message: "🔄 Creating working pose detection model...",
+          message: "⚠️ Real MoveNet model unavailable - using mock pose generation for basic analysis",
         },
       });
     }
 
-    try {
-      // Create a simple model architecture similar to MoveNet
-      const model = tf.sequential({
-        layers: [
-          tf.layers.conv2d({
-            inputShape: [192, 192, 3],
-            filters: 32,
-            kernelSize: 3,
-            activation: "relu",
-            padding: "same",
-          }),
-          tf.layers.maxPooling2d({ poolSize: 2 }),
-          tf.layers.conv2d({
-            filters: 64,
-            kernelSize: 3,
-            activation: "relu",
-            padding: "same",
-          }),
-          tf.layers.maxPooling2d({ poolSize: 2 }),
-          tf.layers.conv2d({
-            filters: 128,
-            kernelSize: 3,
-            activation: "relu",
-            padding: "same",
-          }),
-          tf.layers.globalAveragePooling2d({}),
-          tf.layers.dense({ units: 51, activation: "linear" }), // 17 keypoints * 3 (x, y, confidence)
-        ],
-      });
+    // Use the mock model approach since training a model on-the-fly is not feasible
+    this.model = this.createRealisticMockModel();
+    this.isMockModel = true;
 
-      // Compile the model
-      model.compile({
-        optimizer: "adam",
-        loss: "meanSquaredError",
-        metrics: ["mae"],
-      });
-
-      this.model = model;
-      console.log("✅ Working pose detection model created successfully");
-
-      if (typeof self !== "undefined" && self.postMessage) {
-        self.postMessage({
-          type: "debug",
-          data: {
-            message: "✅ Working pose detection model created successfully",
-          },
-        });
-      }
-    } catch (error) {
-      throw new Error(
-        `Working model creation failed: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-    }
+    // Throw to move to simplified model strategy
+    throw new Error("Cannot create trained model on-the-fly - using mock generation");
   }
 
   private async createSimplifiedModel(): Promise<void> {
-    // Create a very basic model for pose detection
-    console.log("🔄 Creating simplified pose detection model...");
+    // NOTE: Similar to createWorkingModel, an untrained model won't produce useful results
+    // Better to use mock pose generation which provides plausible human poses
+    console.log("⚠️ Cannot create trained model - using mock pose generation");
 
     if (typeof self !== "undefined" && self.postMessage) {
       self.postMessage({
         type: "debug",
         data: {
-          message: "🔄 Creating simplified pose detection model...",
+          message: "⚠️ Using mock pose generation - will provide basic analysis but limited accuracy",
         },
       });
     }
 
-    try {
-      // Create a simple sequential model instead of functional API to avoid type issues
-      this.model = tf.sequential({
-        layers: [
-          tf.layers.conv2d({
-            inputShape: [192, 192, 3],
-            filters: 16,
-            kernelSize: 3,
-            activation: "relu",
-          }),
-          tf.layers.maxPooling2d({ poolSize: 2 }),
-          tf.layers.flatten(),
-          tf.layers.dense({ units: 51, name: "output" }),
-        ],
-      });
+    // Use the mock model
+    this.model = this.createRealisticMockModel();
+    this.isMockModel = true;
 
-      console.log("✅ Simplified pose detection model created successfully");
-
-      if (typeof self !== "undefined" && self.postMessage) {
-        self.postMessage({
-          type: "debug",
-          data: {
-            message: "✅ Simplified pose detection model created successfully",
-          },
-        });
-      }
-    } catch (error) {
-      throw new Error(
-        `Simplified model creation failed: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-    }
+    // Don't throw - this is our final fallback
   }
 
   private createRealisticMockModel(): tf.LayersModel {
@@ -365,7 +341,7 @@ export class LocalMoveNetPoseEstimator {
       // Run inference - use executeAsync for GraphModel
       let predictions: tf.Tensor;
       if (this.model instanceof tf.GraphModel) {
-        // GraphModel needs execute/executeAsync with input name
+        // GraphModel needs execute/executeAsync
         const result = await (this.model as any).executeAsync(tensor);
         predictions = Array.isArray(result) ? result[0] : result;
       } else {
@@ -375,8 +351,12 @@ export class LocalMoveNetPoseEstimator {
 
       const predictionsArray = await predictions.data();
 
+      // MoveNet outputs shape: [1, 1, 17, 3]
+      // We need to reshape to [1, 51] (17 keypoints * 3 values)
+      const reshapedData = Array.from(predictionsArray);
+
       // Process predictions
-      const poses = this.processPredictions([Array.from(predictionsArray)]);
+      const poses = this.processPredictions([reshapedData]);
 
       // Clean up tensors
       tensor.dispose();
@@ -455,23 +435,29 @@ export class LocalMoveNetPoseEstimator {
         "right_ankle",
       ];
 
+      // MoveNet output format: [y, x, confidence] for each of 17 keypoints
+      // Values are normalized to [0, 1] range relative to input image dimensions
       for (let i = 0; i < 17; i++) {
         const y = prediction[i * 3] || 0;
         const x = prediction[i * 3 + 1] || 0;
         const confidence = prediction[i * 3 + 2] || 0;
 
         keypoints.push({
-          x: x * 192,
+          x: x * 192, // Scale to image size
           y: y * 192,
           confidence,
           name: keypointNames[i],
         });
       }
 
-      const score = Math.min(...keypoints.map((kp) => kp.confidence));
+      // Calculate average confidence instead of minimum for more realistic scoring
+      const avgConfidence = keypoints.reduce((sum, kp) => sum + kp.confidence, 0) / keypoints.length;
       const bbox = this.calculateBoundingBox(keypoints);
 
-      poses.push({ keypoints, score, bbox });
+      // Only add pose if it has reasonable confidence
+      if (avgConfidence > 0.2) {
+        poses.push({ keypoints, score: avgConfidence, bbox });
+      }
     }
 
     return poses;

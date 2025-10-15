@@ -4,6 +4,7 @@ import type { LocalMoveNetPoseEstimator } from "../models/movenet-local";
 
 export interface ShotAttempt {
   playerId: string;
+  teamId?: string;
   timestamp: number;
   confidence: number;
   keypoints: {
@@ -133,9 +134,60 @@ export async function extractPoses(
   return results;
 }
 
+/**
+ * Find matching person detection for a pose based on bbox proximity
+ */
+function findMatchingPersonForPose(
+  pose: any,
+  personDetections: any[],
+  timestamp: number
+): any | null {
+  // Find person detection frames near this timestamp
+  const relevantFrames = personDetections.filter(
+    (frame) => Math.abs(frame.timestamp - timestamp) <= 0.1
+  );
+
+  if (relevantFrames.length === 0 || !pose.bbox) {
+    return null;
+  }
+
+  // Find person with closest bbox
+  let closestPerson: any = null;
+  let minDistance = Infinity;
+
+  for (const frame of relevantFrames) {
+    for (const detection of frame.detections || []) {
+      if (detection.type === "person" && detection.bbox && detection.teamId) {
+        // Calculate bbox center distance
+        const [px1, py1, pw, ph] = detection.bbox;
+        const [poseX1, poseY1, poseW, poseH] = pose.bbox;
+
+        const personCenterX = px1 + pw / 2;
+        const personCenterY = py1 + ph / 2;
+        const poseCenterX = poseX1 + poseW / 2;
+        const poseCenterY = poseY1 + poseH / 2;
+
+        const distance = Math.sqrt(
+          Math.pow(personCenterX - poseCenterX, 2) +
+          Math.pow(personCenterY - poseCenterY, 2)
+        );
+
+        // If within 100 pixels, consider it a match
+        if (distance < 100 && distance < minDistance) {
+          minDistance = distance;
+          closestPerson = detection;
+        }
+      }
+    }
+  }
+
+  return closestPerson;
+}
+
 export function detectShotAttempts(
   poseResults: PoseResult[],
-  ballDetections?: any[]
+  ballDetections?: any[],
+  personDetections?: any[]
 ): ShotAttempt[] {
   const shotAttempts: ShotAttempt[] = [];
   const shotDetectionWindow = 1.0; // 1 second window for shot detection
@@ -145,9 +197,8 @@ export function detectShotAttempts(
     self.postMessage({
       type: "debug",
       data: {
-        message: `🔍 Starting shot detection: ${
-          poseResults.length
-        } pose frames, ${ballDetections?.length || 0} ball detections`,
+        message: `🔍 Starting shot detection: ${poseResults.length
+          } pose frames, ${ballDetections?.length || 0} ball detections`,
       },
     });
   }
@@ -174,9 +225,51 @@ export function detectShotAttempts(
     }
 
     for (const pose of currentFrame.poses) {
-      const shotAttempt = analyzePoseForShot(pose, currentFrame.timestamp);
+      // Find matching person detection to get teamId
+      let poseWithTeam = pose;
+      if (personDetections && personDetections.length > 0) {
+        const matchingPerson = findMatchingPersonForPose(
+          pose,
+          personDetections,
+          currentFrame.timestamp
+        );
+        if (matchingPerson) {
+          poseWithTeam = { ...pose, teamId: matchingPerson.teamId, playerId: matchingPerson.playerId };
+
+          // Debug: Log team matching (only first few to avoid spam)
+          if (i < 5 && typeof self !== "undefined" && self.postMessage) {
+            self.postMessage({
+              type: "debug",
+              data: {
+                message: `🎨 Matched pose to person: teamId=${matchingPerson.teamId}, playerId=${matchingPerson.playerId}`,
+              },
+            });
+          }
+        } else {
+          // Debug: Log when no match found
+          if (i < 5 && typeof self !== "undefined" && self.postMessage) {
+            self.postMessage({
+              type: "debug",
+              data: {
+                message: `⚠️ No matching person found for pose at ${currentFrame.timestamp.toFixed(2)}s`,
+              },
+            });
+          }
+        }
+      }
+
+      const shotAttempt = analyzePoseForShot(poseWithTeam, currentFrame.timestamp);
 
       if (shotAttempt && shotAttempt.confidence > 0.5) {
+        // Debug: Log team attribution
+        if (i < 10 && typeof self !== "undefined" && self.postMessage) {
+          self.postMessage({
+            type: "debug",
+            data: {
+              message: `🎯 Shot attempt detected: teamId=${shotAttempt.teamId}, playerId=${shotAttempt.playerId}, confidence=${shotAttempt.confidence.toFixed(3)}`,
+            },
+          });
+        }
         // Check for ball proximity if ball detection is available
         if (ballDetections && ballDetections.length > 0) {
           const ballProximity = checkBallProximity(
@@ -239,6 +332,8 @@ function analyzePoseForShot(
   pose: {
     keypoints: Array<{ x: number; y: number; confidence: number }>;
     bbox: [number, number, number, number];
+    teamId?: string;
+    playerId?: string;
   },
   timestamp: number
 ): ShotAttempt | null {
@@ -288,15 +383,14 @@ function analyzePoseForShot(
     const keypointConfidences = requiredKeypoints
       .map(
         (kp, i) =>
-          `${
-            [
-              "leftWrist",
-              "rightWrist",
-              "leftElbow",
-              "rightElbow",
-              "leftShoulder",
-              "rightShoulder",
-            ][i]
+          `${[
+            "leftWrist",
+            "rightWrist",
+            "leftElbow",
+            "rightElbow",
+            "leftShoulder",
+            "rightShoulder",
+          ][i]
           }: ${kp.confidence.toFixed(3)}`
       )
       .join(", ");
@@ -367,9 +461,8 @@ function analyzePoseForShot(
       data: {
         message: `🔍 Pose analysis: confidence=${confidence.toFixed(
           3
-        )}, armElevation=${armElevation.toFixed(3)}, visibleKeypoints=${
-          visibleKeypoints.length
-        }/6`,
+        )}, armElevation=${armElevation.toFixed(3)}, visibleKeypoints=${visibleKeypoints.length
+          }/6`,
       },
     });
   }
@@ -389,7 +482,8 @@ function analyzePoseForShot(
     }
 
     return {
-      playerId: `player_${timestamp}`, // Simple ID generation
+      playerId: pose.playerId || `player_${timestamp}`, // Use pose playerId if available
+      teamId: pose.teamId || "teamA", // Use pose teamId if available, fallback to teamA
       timestamp,
       confidence,
       keypoints: {
@@ -499,7 +593,7 @@ function calculateShootingConfidence(
       Math.abs(rightWrist.confidence) +
       Math.abs(leftElbow.confidence) +
       Math.abs(rightElbow.confidence)) /
-      4
+    4
   );
   confidence += Math.min(avgConfidence, 0.5) * 0.4; // Cap keypoint contribution
 
@@ -538,7 +632,7 @@ function checkBallProximity(
 
       const distance = Math.sqrt(
         (ballCenter.x - shootingHand.x) ** 2 +
-          (ballCenter.y - shootingHand.y) ** 2
+        (ballCenter.y - shootingHand.y) ** 2
       );
 
       // Return proximity factor (closer = higher value)
@@ -569,9 +663,8 @@ function generateFallbackShotAttempts(ballDetections: any[]): ShotAttempt[] {
       self.postMessage({
         type: "debug",
         data: {
-          message: `🔍 First ball frame: frameIndex=${
-            firstFrame.frameIndex
-          }, detections=${firstFrame.detections?.length || 0}`,
+          message: `🔍 First ball frame: frameIndex=${firstFrame.frameIndex
+            }, detections=${firstFrame.detections?.length || 0}`,
         },
       });
     }
@@ -614,8 +707,12 @@ function generateFallbackShotAttempts(ballDetections: any[]): ShotAttempt[] {
     if (upwardMotion > 8) {
       const timestamp = currentFrame.timestamp || i * (1 / 30);
 
+      // Alternate teams for fallback shots to distribute evenly
+      const teamId = shotAttempts.length % 2 === 0 ? "teamA" : "teamB";
+
       shotAttempts.push({
         playerId: `fallback_player_${i}`,
+        teamId, // Alternate between teams
         timestamp,
         confidence: Math.min(0.75, 0.6 + upwardMotion / 100), // Increased base confidence from 0.5 to 0.6
         keypoints: {

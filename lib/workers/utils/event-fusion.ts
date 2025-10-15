@@ -15,6 +15,7 @@ interface FusionOptions {
   teamClusters: any;
   enable3ptEstimation: boolean;
   enableVisualScoring?: boolean; // New: enable visual score detection (default true for amateur videos)
+  frames: ImageData[];
 }
 
 interface FrameSignal {
@@ -166,8 +167,15 @@ export async function fuseEvents(options: FusionOptions): Promise<GameEvent[]> {
   const ballFramesWithBalls = ballDetections.filter(
     (frame) => frame.detections && frame.detections.length > 0
   ).length;
+
+  // Check team assignment
+  const teamACount = personDetections.reduce((count, frame) =>
+    count + (frame.detections || []).filter((d: any) => d.teamId === "teamA").length, 0);
+  const teamBCount = personDetections.reduce((count, frame) =>
+    count + (frame.detections || []).filter((d: any) => d.teamId === "teamB").length, 0);
+
   console.log(
-    `🔄 Detecting rebounds from ${shotEvents.length} shots (ball data: ${ballFramesWithBalls}/${ballDetections.length} frames)...`
+    `🔄 Detecting rebounds from ${shotEvents.length} shots (ball data: ${ballFramesWithBalls}/${ballDetections.length} frames, teams: A=${teamACount}, B=${teamBCount})...`
   );
 
   const reboundEvents = await detectRebounds(
@@ -328,11 +336,10 @@ async function detectScoreEventsWithAttribution(
         confidence:
           baseConfidence * attributedTeam.confidence * shotType.confidence,
         source: "ocr",
-        notes: `Detected by scoreboard OCR (+${teamADelta} points, ${
-          shotType.type
-        } shot, attribution confidence: ${(
-          attributedTeam.confidence * 100
-        ).toFixed(0)}%)`,
+        notes: `Detected by scoreboard OCR (+${teamADelta} points, ${shotType.type
+          } shot, attribution confidence: ${(
+            attributedTeam.confidence * 100
+          ).toFixed(0)}%)`,
       });
     }
 
@@ -371,11 +378,10 @@ async function detectScoreEventsWithAttribution(
         confidence:
           baseConfidence * attributedTeam.confidence * shotType.confidence,
         source: "ocr",
-        notes: `Detected by scoreboard OCR (+${teamBDelta} points, ${
-          shotType.type
-        } shot, attribution confidence: ${(
-          attributedTeam.confidence * 100
-        ).toFixed(0)}%)`,
+        notes: `Detected by scoreboard OCR (+${teamBDelta} points, ${shotType.type
+          } shot, attribution confidence: ${(
+            attributedTeam.confidence * 100
+          ).toFixed(0)}%)`,
       });
     }
 
@@ -748,7 +754,7 @@ function findPlayerIdForEvent(
           const hoopCenterY = hoopRegion.y + hoopRegion.height / 2;
           distance = Math.sqrt(
             Math.pow(playerCenterX - hoopCenterX, 2) +
-              Math.pow(playerCenterY - hoopCenterY, 2)
+            Math.pow(playerCenterY - hoopCenterY, 2)
           );
         }
 
@@ -943,9 +949,8 @@ function findReboundEvent(
         timestamp: ballFrame.timestamp,
         confidence,
         source: "ball+proximity-heuristic",
-        notes: `Player ${closestPlayer.distance.toFixed(0)}px from ball, ${
-          isOffensive ? "same" : "opposing"
-        } team`,
+        notes: `Player ${closestPlayer.distance.toFixed(0)}px from ball, ${isOffensive ? "same" : "opposing"
+          } team`,
       };
     }
   }
@@ -1468,9 +1473,8 @@ function applyTemporalSmoothing(events: GameEvent[]): GameEvent[] {
         timestamp: medianTimestamp,
         confidence: avgConfidence,
         source: combinedSource,
-        notes: `Merged ${allSimilar.length} similar detections. ${
-          currentEvent.notes || ""
-        }`,
+        notes: `Merged ${allSimilar.length} similar detections. ${currentEvent.notes || ""
+          }`,
       };
 
       smoothedEvents.push(smoothedEvent);
@@ -1544,7 +1548,7 @@ function generateShotAttemptsFromBallMovement(
 
           const distance = Math.sqrt(
             Math.pow(personX - ballX, 2) +
-              Math.pow(personY - (currentY + 50), 2)
+            Math.pow(personY - (currentY + 50), 2)
           );
 
           if (distance < minDistance) {

@@ -56,7 +56,12 @@ export class JerseyNumberDetector {
     imageData: ImageData,
     bbox: [number, number, number, number]
   ): ImageData {
-    const [x, y, width, height] = bbox;
+    // Convert normalized bbox to pixel coordinates
+    const [xNorm, yNorm, wNorm, hNorm] = bbox;
+    const x = xNorm * imageData.width;
+    const y = yNorm * imageData.height;
+    const width = wNorm * imageData.width;
+    const height = hNorm * imageData.height;
 
     // Jersey is typically in upper 40% of person bbox
     const jerseyY = y + height * 0.2;
@@ -72,6 +77,16 @@ export class JerseyNumberDetector {
 
     const cropWidth = Math.max(1, endX - startX); // Ensure at least 1px
     const cropHeight = Math.max(1, endY - startY); // Ensure at least 1px
+
+    // Debug: log bbox and crop coordinates
+    if (typeof self !== 'undefined' && self.postMessage) {
+      self.postMessage({
+        type: "debug",
+        data: {
+          message: `Jersey bbox: [${bbox.join(',')}], crop: x=${startX}, y=${startY}, w=${cropWidth}, h=${cropHeight}, imageData: w=${imageData.width}, h=${imageData.height}`,
+        },
+      });
+    }
 
     // Validate dimensions before creating ImageData
     if (
@@ -106,39 +121,66 @@ export class JerseyNumberDetector {
    * Preprocess jersey image for better OCR recognition
    * Apply contrast enhancement and thresholding
    */
-  private preprocessJerseyImage(imageData: ImageData): ImageData {
-    // Validate input dimensions
+  private preprocessJerseyImage(
+    imageData: ImageData,
+    upscaleFactor: number = 2
+  ): ImageData {
     if (!imageData || imageData.width <= 0 || imageData.height <= 0) {
-      console.warn(
-        "Invalid imageData for preprocessing, returning 1x1 placeholder"
-      );
       return new ImageData(1, 1);
     }
 
-    const processed = new ImageData(
-      new Uint8ClampedArray(imageData.data),
-      imageData.width,
-      imageData.height
+    const canvas = new OffscreenCanvas(
+      imageData.width * upscaleFactor,
+      imageData.height * upscaleFactor
     );
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return imageData;
 
-    // Convert to grayscale and enhance contrast
-    for (let i = 0; i < processed.data.length; i += 4) {
-      const r = processed.data[i];
-      const g = processed.data[i + 1];
-      const b = processed.data[i + 2];
+    ctx.imageSmoothingEnabled = false;
+    // Create a temporary canvas to put the original ImageData
+    const tempCanvas = new OffscreenCanvas(imageData.width, imageData.height);
+    const tempCtx = tempCanvas.getContext("2d");
+    if (!tempCtx) return imageData;
+    tempCtx.putImageData(imageData, 0, 0);
+    // Draw the original jersey region onto the upscaled canvas
+    ctx.drawImage(
+      tempCanvas,
+      0,
+      0,
+      imageData.width,
+      imageData.height,
+      0,
+      0,
+      canvas.width,
+      canvas.height
+    );
+    const upscaled = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-      // Grayscale
+    // Convert to grayscale and apply a lower threshold for better OCR
+    const threshold = 30; // Lowered further
+    const grayscaleVals: number[] = [];
+    for (let i = 0; i < upscaled.data.length; i += 4) {
+      const r = upscaled.data[i];
+      const g = upscaled.data[i + 1];
+      const b = upscaled.data[i + 2];
       const gray = 0.299 * r + 0.587 * g + 0.114 * b;
-
-      // Simple contrast enhancement
-      const enhanced = gray > 128 ? 255 : 0;
-
-      processed.data[i] = enhanced;
-      processed.data[i + 1] = enhanced;
-      processed.data[i + 2] = enhanced;
+      grayscaleVals.push(gray);
+      const value = gray > threshold ? 255 : 0;
+      upscaled.data[i] = value;
+      upscaled.data[i + 1] = value;
+      upscaled.data[i + 2] = value;
+    }
+    // Debug: log first 20 grayscale values
+    if (typeof self !== 'undefined' && self.postMessage) {
+      self.postMessage({
+        type: "debug",
+        data: {
+          message: `Jersey grayscale values: ${grayscaleVals.slice(0, 20).map(v => Math.round(v)).join(",")}`,
+        },
+      });
     }
 
-    return processed;
+    return upscaled;
   }
 
   /**
@@ -156,6 +198,17 @@ export class JerseyNumberDetector {
       // Preprocess for better OCR
       const preprocessed = this.preprocessJerseyImage(jerseyImageData);
 
+      // Pixel stats
+      let minPx = 255, maxPx = 0, sumPx = 0, countPx = 0;
+      for (let i = 0; i < preprocessed.data.length; i += 4) {
+        const v = preprocessed.data[i];
+        minPx = Math.min(minPx, v);
+        maxPx = Math.max(maxPx, v);
+        sumPx += v;
+        countPx++;
+      }
+      let avgPx = countPx > 0 ? Math.round(sumPx / countPx) : 0;
+
       // Convert to canvas for OCR
       const canvas = new OffscreenCanvas(
         preprocessed.width,
@@ -169,6 +222,16 @@ export class JerseyNumberDetector {
       ctx.putImageData(preprocessed, 0, 0);
       const blob = await canvas.convertToBlob({ type: "image/png" });
 
+      // Base64 PNG
+      let base64Png = "";
+      try {
+        const arrayBuffer = await blob.arrayBuffer();
+        const uint8Array = new Uint8Array(arrayBuffer);
+        base64Png = btoa(String.fromCharCode.apply(null, Array.from(uint8Array)));
+      } catch (err) {
+        base64Png = `ERROR: ${err}`;
+      }
+
       // Run OCR
       const {
         data: { text, confidence },
@@ -177,6 +240,16 @@ export class JerseyNumberDetector {
       // Extract valid jersey number (1-2 digits, typically 0-99)
       const cleaned = text.replace(/\s+/g, "").trim();
       const match = cleaned.match(/^(\d{1,2})$/);
+
+      // Send debug info for preprocessed image and OCR result
+      if (typeof self !== 'undefined' && self.postMessage) {
+        self.postMessage({
+          type: "debug",
+          data: {
+            message: `Preprocessed jersey: w=${preprocessed.width}, h=${preprocessed.height}, minPx=${minPx}, maxPx=${maxPx}, avgPx=${avgPx}, base64Png=${base64Png.substring(0, 100)}..., OCR text='${text}', OCR cleaned='${cleaned}', OCR confidence=${confidence}`,
+          },
+        });
+      }
 
       if (match && confidence > 50) {
         // Require at least 50% confidence
@@ -188,7 +261,14 @@ export class JerseyNumberDetector {
 
       return { number: null, confidence: 0 };
     } catch (error) {
-      console.error("Jersey OCR failed:", error);
+      if (typeof self !== 'undefined' && self.postMessage) {
+        self.postMessage({
+          type: "debug",
+          data: {
+            message: `Jersey OCR failed: ${error}`,
+          },
+        });
+      }
       return { number: null, confidence: 0 };
     }
   }
@@ -269,14 +349,14 @@ export class JerseyNumberDetector {
           visualFeatures.avgColor[0] - track.visualFeatures.avgColor[0],
           2
         ) +
-          Math.pow(
-            visualFeatures.avgColor[1] - track.visualFeatures.avgColor[1],
-            2
-          ) +
-          Math.pow(
-            visualFeatures.avgColor[2] - track.visualFeatures.avgColor[2],
-            2
-          )
+        Math.pow(
+          visualFeatures.avgColor[1] - track.visualFeatures.avgColor[1],
+          2
+        ) +
+        Math.pow(
+          visualFeatures.avgColor[2] - track.visualFeatures.avgColor[2],
+          2
+        )
       );
 
       const heightDiff = Math.abs(
@@ -305,75 +385,50 @@ export class JerseyNumberDetector {
     personDetections: any[],
     frameIndex: number,
     timestamp: number
-  ): Promise<JerseyDetectionResult> {
-    const players: JerseyDetectionResult["players"] = [];
+  ): Promise<{
+    frameIndex: number;
+    timestamp: number;
+    players: Array<{
+      playerId: string;
+      bbox: [number, number, number, number];
+      teamId?: string;
+      confidence: number;
+    }>;
+  }> {
+    const players: Array<{
+      playerId: string;
+      bbox: [number, number, number, number];
+      teamId?: string;
+      confidence: number;
+    }> = [];
 
-    // Process each detected person
-    for (const detection of personDetections) {
-      if (detection.type !== "person") continue;
-
-      const bbox = detection.bbox as [number, number, number, number];
-      const teamId = detection.teamId;
-
+    for (const det of personDetections) {
+      const bbox = det.bbox as [number, number, number, number];
+      const teamId = det.teamId;
       // Extract jersey region
       const jerseyImageData = this.extractJerseyRegion(imageData, bbox);
-
-      // Try OCR first
+      // Debug: log first 20 raw pixel values of jersey region
+      if (typeof self !== 'undefined' && self.postMessage) {
+        const pxVals = Array.from(jerseyImageData.data.slice(0, 80));
+        self.postMessage({
+          type: "debug",
+          data: {
+            message: `Raw jersey region pixels: ${pxVals.join(",")}`,
+          },
+        });
+      }
+      // Run OCR and emit debug log
       const ocrResult = await this.runJerseyOCR(jerseyImageData);
-
       let playerId: string;
       let confidence: number;
-
-      if (ocrResult.number && ocrResult.confidence > 0.6) {
-        // Successfully detected jersey number
+      if (ocrResult.number) {
         playerId = ocrResult.number;
         confidence = ocrResult.confidence;
-
-        // Update or create player track
-        if (!this.playerTracks.has(playerId)) {
-          this.playerTracks.set(playerId, {
-            playerId,
-            teamId,
-            lastSeen: timestamp,
-            appearances: [],
-            visualFeatures: this.extractVisualFeatures(imageData, bbox),
-          });
-        }
-
-        const track = this.playerTracks.get(playerId)!;
-        track.lastSeen = timestamp;
-        track.appearances.push({ timestamp, bbox, confidence });
       } else {
-        // OCR failed, try visual re-identification
-        const visualFeatures = this.extractVisualFeatures(imageData, bbox);
-        const matchedId = this.findMatchingTrack(
-          bbox,
-          visualFeatures,
-          timestamp,
-          teamId
-        );
-
-        if (matchedId) {
-          playerId = matchedId;
-          confidence = 0.5; // Lower confidence for visual matching
-          const track = this.playerTracks.get(playerId)!;
-          track.lastSeen = timestamp;
-          track.appearances.push({ timestamp, bbox, confidence });
-        } else {
-          // Create unknown player track
-          playerId = `unknown-${this.nextUnknownId++}`;
-          confidence = 0.3;
-
-          this.playerTracks.set(playerId, {
-            playerId,
-            teamId,
-            lastSeen: timestamp,
-            appearances: [{ timestamp, bbox, confidence }],
-            visualFeatures,
-          });
-        }
+        // Fallback: assign unique ID
+        playerId = `player_${this.nextUnknownId++}`;
+        confidence = 0.4;
       }
-
       players.push({
         playerId,
         bbox,
@@ -381,7 +436,6 @@ export class JerseyNumberDetector {
         confidence,
       });
     }
-
     return {
       frameIndex,
       timestamp,
